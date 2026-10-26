@@ -9,7 +9,7 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-from .matches import extract_matches
+from .matches import extract_matches, find_team_names
 from .save_file import read_save
 
 FORMAT_VERSION = 1
@@ -19,16 +19,20 @@ def build_dataset(save_path: Path) -> dict:
     save = read_save(save_path)
     matches = extract_matches(save.body)
     champions = sorted({c for mt in matches for c in mt.picks_a + mt.picks_b})
+    team_ids = {mt.team_a for mt in matches} | {mt.team_b for mt in matches}
+    teams = find_team_names(save.body, team_ids)
     return {
         "format_version": FORMAT_VERSION,
         "save": {"file": save_path.name, **asdict(save.header)},
         "champions": champions,
+        "teams": {str(t): teams.get(t, f"Team {t}") for t in sorted(team_ids)},
         "matches": [{**asdict(mt), "winner": mt.winner} for mt in matches],
         "summary": {
             "matches": len(matches),
             "with_bans": sum(1 for mt in matches if mt.bans_a),
             "patches": sorted({mt.patch for mt in matches}),
-            "teams": len({mt.team_a for mt in matches} | {mt.team_b for mt in matches}),
+            "teams": len(team_ids),
+            "named_teams": len(teams),
         },
     }
 

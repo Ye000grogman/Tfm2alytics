@@ -4,18 +4,27 @@ The body has no field names: strings are an 8-byte little-endian length plus
 UTF-8 text, and integers are 8-byte little-endian. Two record types matter:
 
 Match summary (one per game, ids run 0..N-1, stored back to back):
-    u64 team_a, u64 team_b, u64 match_id, u64 1, u64 match_id,
+    u64 match_id, u64 1, u64 match_id,
     str patch ("2026.0.0"),
     list[str] team A picks (5), list[str] team B picks (5),
-    u8 result (1 = team A won; see STATUS notes, inferred not confirmed)
+    u8 result (1 = team A won),
+    u64 team_a, u64 team_b
 
-Match detail (one per game, separate section):
-    ... list[str] team A bans (3), list[str] team B bans (3),
+Match detail (one per game, separate section with its own numbering):
+    ... u64 detail_id, u64 team_a, u64 team_b,
+    list[str] team A bans (3), list[str] team B bans (3),
     then one block per player holding the champion they played, in position
     order (team A's five, then team B's five) followed by per-player stats.
 
-The detail record does not carry the match id, so it is linked to its summary
-by the set of ten champions picked, which is unique for almost every game.
+The detail list has a few more games than the summary list, so the two ids
+drift apart. Details are linked to summaries by the set of ten champions
+picked (unique for almost every game) and the team ids must agree.
+
+Team table: u64 team_id, u64 26, u64 team_id, str name.
+
+Checked against real results: Abyssal Eclipse 0-2 Polar Blizzards and
+Adamant Ronin 2-0 Quartz Imps (the last series in the save) both come out
+right with "result 1 = team A won".
 """
 
 import re
@@ -28,6 +37,9 @@ _SUMMARY = re.compile(
     rb"\x05\x00{7}"  # team A pick count
 )
 _ID_STR = re.compile(rb"([\x02-\x29])\x00{7}(" + _IDENT + rb")")
+# Lookahead so matches can overlap: an id of 26 looks like the tag itself.
+_TEAM = re.compile(rb"(?=(.{8})\x1a\x00{7}(.{8})([\x01-\x40])\x00{7})", re.S)
+_TEAM_NAME = re.compile(r"[A-Za-z0-9 '.&-]+")
 
 
 @dataclass
@@ -80,21 +92,22 @@ def _is_ident(s: str) -> bool:
 def find_summaries(body: bytes) -> list[Match]:
     matches = []
     for m in _SUMMARY.finditer(body):
-        start = m.start() - 40
+        start = m.start() - 24
         if start < 0:
             continue
-        team_a, team_b, match_id, one, match_id2 = (_u64(body, start + 8 * i) for i in range(5))
+        match_id, one, match_id2 = (_u64(body, start + 8 * i) for i in range(3))
         if one != 1 or match_id != match_id2:
             continue
         try:
             picks_a, off = _read_str_list(body, m.end() - 8)
             picks_b, off = _read_str_list(body, off)
+            team_a, team_b = _u64(body, off + 1), _u64(body, off + 9)
         except (ValueError, UnicodeDecodeError, struct.error):
             continue
         picks = picks_a + picks_b
         if len(picks_a) != 5 or len(picks_b) != 5 or not all(map(_is_ident, picks)):
             continue
-        if len(set(picks)) != 10 or off >= len(body) or body[off] > 1:
+        if len(set(picks)) != 10 or body[off] > 1:
             continue
         matches.append(
             Match(
@@ -140,7 +153,8 @@ def attach_details(body: bytes, matches: list[Match]) -> int:
         if len(candidates) != 1 or len(played) != 10:
             continue  # ambiguous or not a match detail record
         mt = candidates[0]
-        if set(played[:5]) != set(mt.picks_a):
+        teams = (_u64(body, h.start() - 16), _u64(body, h.start() - 8))
+        if set(played[:5]) != set(mt.picks_a) or teams != (mt.team_a, mt.team_b):
             continue
         bans_a, off = _read_str_list(body, h.start())
         bans_b, _ = _read_str_list(body, off)
@@ -148,6 +162,18 @@ def attach_details(body: bytes, matches: list[Match]) -> int:
         mt.positions_a, mt.positions_b = played[:5], played[5:]
         linked += 1
     return linked
+
+
+def find_team_names(body: bytes, team_ids: set[int]) -> dict[int, str]:
+    names: dict[int, str] = {}
+    for m in _TEAM.finditer(body):
+        team_id, team_id2, n = _u64(m.group(1), 0), _u64(m.group(2), 0), m.group(3)[0]
+        if team_id != team_id2 or team_id not in team_ids or team_id in names:
+            continue
+        name = body[m.start() + 32 : m.start() + 32 + n].decode("utf-8", "replace")
+        if _TEAM_NAME.fullmatch(name):
+            names[team_id] = name
+    return names
 
 
 def extract_matches(body: bytes) -> list[Match]:

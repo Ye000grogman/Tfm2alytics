@@ -1,7 +1,7 @@
 import gzip
 import struct
 
-from tfm2alytics.matches import extract_matches
+from tfm2alytics.matches import extract_matches, find_team_names
 from tfm2alytics.save_file import parse_header, read_save
 
 
@@ -21,27 +21,33 @@ PICKS_A = ["sand_mage", "astrologer", "gambler", "lancer", "dual_blader"]
 PICKS_B = ["pyromancer", "poison_dart_hunter", "soldier", "gunner", "monk"]
 BANS_A = ["circus_blade", "demon", "android"]
 BANS_B = ["alchemist", "bomber", "swordman"]
+TEAMS = {60: "Terra Comets", 62: "Quake Walkers", 26: "Lightning Raiders", 3: "Grid Strikers", 9: "Hyper Jump"}
 FILLER_CHAMPS = BANS_A + BANS_B  # make sure ban champions are "known" picks elsewhere
 
 
 def summary(match_id, team_a, team_b, picks_a, picks_b, result):
     return (
-        u64(team_a) + u64(team_b) + u64(match_id) + u64(1) + u64(match_id)
+        u64(match_id) + u64(1) + u64(match_id)
         + s("2026.0.0") + str_list(picks_a) + str_list(picks_b) + bytes([result])
+        + u64(team_a) + u64(team_b)
     )
 
 
-def detail(bans_a, bans_b, positions):
+def detail(team_a, team_b, bans_a, bans_b, positions):
     players = b"".join(s(c) + u64(0) * 4 for c in positions)
-    return u64(7) + str_list(bans_a) + str_list(bans_b) + b"\x01" + players + u64(0) * 8
+    return (
+        u64(7) + u64(team_a) + u64(team_b) + str_list(bans_a) + str_list(bans_b)
+        + b"\x01" + players + u64(0) * 8
+    )
 
 
 def make_body():
     other_a = FILLER_CHAMPS[:5]
     other_b = [FILLER_CHAMPS[5], "monk", "gunner", "soldier", "lancer"]
+    teams = b"".join(u64(t) + u64(26) + u64(t) + s(name) for t, name in TEAMS.items())
     summaries = summary(0, 60, 62, PICKS_A, PICKS_B, 0) + summary(1, 3, 9, other_a, other_b, 1)
-    details = detail(BANS_A, BANS_B, list(reversed(PICKS_A)) + PICKS_B)
-    return b"\x00" * 16 + details + b"\x00" * 16 + summaries + b"\x00" * 16
+    details = detail(60, 62, BANS_A, BANS_B, list(reversed(PICKS_A)) + PICKS_B)
+    return teams + b"\x00" * 16 + details + b"\x00" * 16 + summaries + b"\x00" * 16
 
 
 def test_extract_matches_links_bans_and_positions():
@@ -57,6 +63,17 @@ def test_extract_matches_links_bans_and_positions():
 
     assert matches[1].winner == "a"
     assert matches[1].bans_a == []  # no detail record for this one
+
+
+def test_detail_with_other_teams_is_not_linked():
+    body = summary(0, 60, 62, PICKS_A, PICKS_B, 0) + detail(3, 9, BANS_A, BANS_B, PICKS_A + PICKS_B)
+    assert extract_matches(body)[0].bans_a == []
+
+
+def test_find_team_names():
+    assert find_team_names(make_body(), {60, 62, 26, 3}) == {
+        60: "Terra Comets", 62: "Quake Walkers", 26: "Lightning Raiders", 3: "Grid Strikers"
+    }
 
 
 def test_parse_header():
