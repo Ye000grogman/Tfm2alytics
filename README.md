@@ -6,20 +6,24 @@ Status: **Phase 4 (draft helper v0)**. Next is a trained draft model. See the pr
 
 ## Quick start
 
-Needs Python 3.10+ and nothing else.
+**New here? Follow [INSTALL.md](INSTALL.md).** It covers everything from installing Python onward.
+
+Needs Python 3.10+ and nothing else. On Windows, double-click `start.bat`, or run:
 
 ```
-python -m tfm2alytics.extract "%APPDATA%\TeamSamoyed\TeamfightManager2\data" -o data
 python -m tfm2alytics.serve
 ```
 
-The first command reads every save in the game's save folder (or pass one `.data` file).
-The second opens the stats site in your browser at `http://127.0.0.1:8642/site/`. It only
-runs on your PC. Re-run the extractor whenever you want fresh numbers.
+This reads every save in the game's save folder, opens the site at `http://127.0.0.1:8642/site/`,
+and keeps watching the folder. Whenever the game writes a save, the save is re-read and any open page
+refreshes its numbers within about 15 seconds, without losing your filters or the draft in progress.
+"Latest save" in the save picker always follows the newest save. Everything runs on your PC.
+
+To extract without the site: `python -m tfm2alytics.extract [save file or folder] -o data`.
 
 ## The stats site
 
-- **Save picker:** every extracted save, newest selected first. You can also open an extracted `.json` file directly.
+- **Save picker:** "Latest save" (follows the game) or any extracted save. You can also open an extracted `.json` file directly.
 - **Filters:** patch, which matches count (whole league, your team's games, your team's picks, or your opponents' picks against you), minimum games, and search.
 - **Tier list:** win rate, pick rate, ban rate, presence and games per champion. Click a header to sort. Tiers are relative: top 10% S, next 20% A, middle 40% B, next 20% C, bottom 10% D. They're ranked by a smoothed win rate with a small bonus for presence.
 - **Champion panel:** best and worst allies (synergy), champions it beats or loses to (counters), and win rate by patch.
@@ -34,7 +38,7 @@ board as the in-game draft goes. Click a suggestion or any champion to put it in
 - **Enemy turns:** shows their strongest options, so you can see what's coming.
 - **Draft edge:** a win chance from the picks alone. It ignores player skill.
 
-The save doesn't record the game's pick/ban order, so the board uses bans alternating and then 1-2-2-2-2-1 picks. Any slot can be filled by hand.
+The board follows TFM2's order: bans alternate starting with the first team, then picks go 1-2-2-2-2-1. Any slot can also be filled by hand.
 
 ### How good is it?
 
