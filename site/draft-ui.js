@@ -3,8 +3,8 @@
 const BANS = 3;
 const PICKS = 5;
 
-// Default order: bans alternate, then picks go 1-2-2-2-2-1 starting with the first-pick team.
-// The game's real order isn't in the save, so any slot can also be clicked directly.
+// TFM2's order (checked in game): bans alternate starting with the first team,
+// then picks go 1-2-2-2-2-1. Any slot can also be clicked directly.
 function draftOrder(firstPick) {
   const [f, s] = firstPick === "me" ? ["me", "enemy"] : ["enemy", "me"];
   const order = [];
@@ -28,8 +28,7 @@ const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt
 const signedPct = (x) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
 const filled = (list) => list.filter(Boolean);
 
-async function init() {
-  $("save-select").addEventListener("change", (e) => loadSave(e.target.value));
+function init() {
   $("patch-select").addEventListener("change", rebuildModel);
   $("first-pick").addEventListener("change", () => {
     state.active = nextEmptySlot();
@@ -38,31 +37,27 @@ async function init() {
   $("reset").addEventListener("click", resetDraft);
   $("search").addEventListener("input", renderGrid);
 
-  try {
-    const saves = await (await fetch("../data/index.json", { cache: "no-store" })).json();
-    $("save-select").innerHTML = saves
-      .map((s) => `<option value="${escapeHtml(s.json)}">${escapeHtml(s.team || s.file)} · ${escapeHtml(s.file)}</option>`)
-      .join("");
-    if (saves.length) {
-      const latest = saves[saves.length - 1].json;
-      $("save-select").value = latest;
-      await loadSave(latest);
-    }
-  } catch (err) {
-    $("suggest-hint").textContent = "Couldn't read data/index.json. Start the site with `python -m tfm2alytics.serve`.";
-  }
+  SaveFeed.start({
+    select: $("save-select"),
+    status: $("save-info"),
+    onLoad: setDataset,
+    onError: (text) => ($("suggest-hint").textContent = text),
+  });
 }
 
-async function loadSave(file) {
-  state.dataset = await (await fetch(`../data/${encodeURIComponent(file)}`, { cache: "no-store" })).json();
-  const patches = [...new Set(state.dataset.matches.map((m) => m.patch))].sort(Stats.comparePatch).reverse();
-  const counts = Object.fromEntries(patches.map((p) => [p, state.dataset.matches.filter((m) => m.patch === p).length]));
+// On a refresh of the same save, keep the patch and the draft in progress.
+function setDataset(dataset, { refresh = false } = {}) {
+  const keepPatch = $("patch-select").value;
+  state.dataset = dataset;
+  const patches = [...new Set(dataset.matches.map((m) => m.patch))].sort(Stats.comparePatch).reverse();
+  const counts = Object.fromEntries(patches.map((p) => [p, dataset.matches.filter((m) => m.patch === p).length]));
   $("patch-select").innerHTML =
     patches.map((p) => `<option value="${p}">${p} (${counts[p]} games)</option>`).join("") +
-    `<option value="all">All patches (${state.dataset.matches.length} games)</option>`;
-  $("patch-select").value = patches[0];
+    `<option value="all">All patches (${dataset.matches.length} games)</option>`;
+  const keep = refresh && [...$("patch-select").options].some((o) => o.value === keepPatch);
+  $("patch-select").value = keep ? keepPatch : patches[0];
   rebuildModel();
-  resetDraft();
+  if (!refresh) resetDraft();
 }
 
 function rebuildModel() {

@@ -26,7 +26,7 @@
       </select>
     </label>
     <button id="reset" class="button">Reset draft</button>
-    <div id="model-info" class="save-info"></div>
+    <div class="save-info"><div id="model-info"></div><div id="save-info" class="small"></div></div>
   </header>
 
   <main class="draft-layout">
@@ -61,11 +61,12 @@
     plus its synergy with your picks plus how it does against their picks. A ban is scored as
     how good that champion would be for the enemy, nudged toward champions that get picked or
     banned a lot. In a backtest on 10,077 games, the team this model favours won 63% of the time.
-    Click any slot to fill or change it; the draft order only decides which slot comes next.
+    Click any slot to fill or change it.
   </footer>
 
   <script src="stats.js"></script>
   <script src="draft.js"></script>
+  <script src="live.js"></script>
   <script src="draft-ui.js"></script>
 </body>
 </html>

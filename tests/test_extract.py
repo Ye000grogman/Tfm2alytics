@@ -94,3 +94,20 @@ def test_read_save_roundtrip(tmp_path):
     save = read_save(path)
     assert save.body == body
     assert save.header.team == "Abyssal Eclipse"
+
+
+def test_needs_extract_tracks_newer_saves(tmp_path):
+    import os
+
+    from tfm2alytics.serve import needs_extract
+
+    save = tmp_path / "save_1.data"
+    save.write_bytes(b"x")
+    out = tmp_path / "data"
+    out.mkdir()
+    assert needs_extract(save, out)
+    (out / "save_1.json").write_text("{}")
+    os.utime(save, (1_000, 1_000))
+    assert not needs_extract(save, out)
+    os.utime(save, (4_000_000_000, 4_000_000_000))  # the game wrote the save again
+    assert needs_extract(save, out)

@@ -12,27 +12,17 @@ const signedPct = (x) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
 const champName = (id) => id.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-async function init() {
+function init() {
   bindControls();
-  try {
-    const res = await fetch("../data/index.json", { cache: "no-store" });
-    if (!res.ok) throw new Error(res.statusText);
-    const saves = await res.json();
-    const select = $("save-select");
-    select.innerHTML = saves
-      .map((s) => `<option value="${escapeHtml(s.json)}">${escapeHtml(s.team || s.file)} · ${escapeHtml(s.file)} (${s.matches} matches)</option>`)
-      .join("");
-    if (saves.length) await loadSave(saves[saves.length - 1].json);
-    select.value = saves.length ? saves[saves.length - 1].json : "";
-    if (!saves.length) showEmpty("No extracted saves yet. Run the extractor first (see README).");
-  } catch (err) {
-    $("save-select").innerHTML = "<option>No data folder found</option>";
-    showEmpty("Couldn't read data/index.json. Start the site with `python -m tfm2alytics.serve`, or open an extracted .json file above.");
-  }
+  SaveFeed.start({
+    select: $("save-select"),
+    status: $("save-info"),
+    onLoad: setDataset,
+    onError: showEmpty,
+  });
 }
 
 function bindControls() {
-  $("save-select").addEventListener("change", (e) => loadSave(e.target.value));
   $("file-input").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     if (file) setDataset(JSON.parse(await file.text()));
@@ -51,19 +41,17 @@ function bindControls() {
   });
 }
 
-async function loadSave(file) {
-  const res = await fetch(`../data/${encodeURIComponent(file)}`, { cache: "no-store" });
-  setDataset(await res.json());
-}
-
-function setDataset(dataset) {
+// On a refresh of the same save, keep the chosen patch and champion.
+function setDataset(dataset, { refresh = false } = {}) {
+  const keepPatch = $("patch-select").value;
   state.dataset = dataset;
-  state.selected = null;
+  if (!refresh) state.selected = null;
   const patches = [...new Set(dataset.matches.map((m) => m.patch))].sort(Stats.comparePatch).reverse();
   $("patch-select").innerHTML =
     `<option value="all">All patches</option>` + patches.map((p) => `<option>${escapeHtml(p)}</option>`).join("");
+  if (refresh && [...$("patch-select").options].some((o) => o.value === keepPatch)) $("patch-select").value = keepPatch;
   const save = dataset.save;
-  $("save-info").textContent = `${save.team || "?"} · manager ${save.manager || "?"} · game ${save.game_version || "?"}`;
+  $("save-title").textContent = `${save.team || "?"} · manager ${save.manager || "?"} · game ${save.game_version || "?"}`;
   const hasTeam = save.my_team_id != null;
   for (const opt of $("scope-select").options) opt.disabled = opt.value !== "all" && !hasTeam;
   if (!hasTeam) $("scope-select").value = "all";
