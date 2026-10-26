@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+# Extracted datasets and save files stay local
+data/
+*.data
