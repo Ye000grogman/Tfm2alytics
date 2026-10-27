@@ -48,7 +48,7 @@
  "poison_dart_hunter": {"damage": "physical", "range": "ranged", "tags": ["buffer", "light_cc"]},
  "pole_warrior": {"damage": "physical", "range": "melee", "tags": ["cc", "frontline"]},
  "priest": {"damage": "magic", "range": "ranged", "tags": ["buffer", "healing", "shield"]},
- "prisoner": {"damage": "physical", "range": "melee", "tags": ["frontline", "cc"]},
+ "prisoner": {"damage": "physical", "range": "melee", "tags": ["cc", "frontline", "self_shield"]},
  "pyromancer": {"damage": "magic", "range": "ranged", "tags": []},
  "pythoness": {"damage": "magic", "range": "ranged", "tags": ["healing"]},
  "sand_mage": {"damage": "magic", "range": "ranged", "tags": ["cc"]},
