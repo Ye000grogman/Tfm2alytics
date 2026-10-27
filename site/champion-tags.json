@@ -39,7 +39,7 @@
  "lancer": {"damage": "physical", "range": "melee", "tags": ["cc"]},
  "lightning_mage": {"damage": "magic", "range": "ranged", "tags": ["cc"]},
  "magic_knight": {"damage": "mixed", "range": "melee", "tags": []},
- "monk": {"damage": "magic", "range": "melee", "tags": ["frontline", "healing"]},
+ "monk": {"damage": "magic", "range": "melee", "tags": ["frontline", "healing", "light_cc", "mobility", "shield"]},
  "necromancer": {"damage": "magic", "range": "ranged", "tags": []},
  "nightmare": {"damage": "physical", "range": "melee", "tags": []},
  "ninja": {"damage": "physical", "range": "melee", "tags": []},
