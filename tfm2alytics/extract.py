@@ -18,7 +18,7 @@ from .matches import extract_matches, find_team_names
 from .patches import find_patch_notes
 from .save_file import read_save
 
-FORMAT_VERSION = 2  # 2: adds patch_notes
+FORMAT_VERSION = 3  # 2: adds patch_notes. 3: adds players (skills and fight stats)
 
 
 def default_save_dir() -> Path | None:
@@ -53,6 +53,7 @@ def build_dataset(save_path: Path) -> dict:
         "summary": {
             "matches": len(matches),
             "with_bans": sum(1 for mt in matches if mt.bans_a),
+            "with_players": sum(1 for mt in matches if mt.players_a),
             "patches": sorted({mt.patch for mt in matches}),
             "teams": len(team_ids),
             "named_teams": len(teams),

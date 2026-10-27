@@ -16,6 +16,15 @@ Match detail (one per game, separate section with its own numbering):
     then one block per player holding the champion they played, in position
     order (team A's five, then team B's five) followed by per-player stats.
 
+Player block (inside a match detail):
+    u64 2, u64 player_id, u64 0, u64 slot (0-4), u64 1,
+    8 u64 skill ratings (mostly 0-100, top players go a bit over; they
+    change between seasons),
+    more u64s (traits and preferences, 14-18 of them), str champion, ...
+    the champion string twice more; the third is followed by
+    u64 0, u64 1, u64 flag, u64 ?, u64 damage dealt, u64 damage taken,
+    u64 healing, u64 gold.
+
 The detail list has a few more games than the summary list, so the two ids
 drift apart. Details are linked to summaries by the set of ten champions
 picked (unique for almost every game) and the team ids must agree.
@@ -40,6 +49,8 @@ _ID_STR = re.compile(rb"([\x02-\x29])\x00{7}(" + _IDENT + rb")")
 # Lookahead so matches can overlap: an id of 26 looks like the tag itself.
 _TEAM = re.compile(rb"(?=(.{8})\x1a\x00{7}(.{8})([\x01-\x40])\x00{7})", re.S)
 _TEAM_NAME = re.compile(r"[A-Za-z0-9 '.&-]+")
+_PLAYER = re.compile(rb"(?s)(?=\x02\x00{7}(..)\x00{6}\x00{8}[\x00-\x04]\x00{7}\x01\x00{7})")
+SKILLS = 8
 
 
 @dataclass
@@ -56,6 +67,9 @@ class Match:
     # Picks in position order, when the detail record was found.
     positions_a: list[str] = field(default_factory=list)
     positions_b: list[str] = field(default_factory=list)
+    # One entry per player in position order, when every player block was read.
+    players_a: list[dict] = field(default_factory=list)
+    players_b: list[dict] = field(default_factory=list)
 
     @property
     def winner(self) -> str:
@@ -132,6 +146,36 @@ def _champ_strings(body: bytes, champions: set[str], start: int, end: int) -> li
     return out
 
 
+def _read_players(body: bytes, played: list[str], start: int, end: int) -> list[dict] | None:
+    """The ten player blocks of one match detail, or None if any is missing."""
+    players = []
+    for h in _PLAYER.finditer(body, start, end):
+        if len(players) == len(played):
+            break
+        p = h.start()
+        player_id = _u64(body, p + 8)
+        champ = played[len(players)]
+        name = struct.pack("<Q", len(champ)) + champ.encode()
+        first = body.find(name, p + 40, p + 400)
+        if player_id == 0 or first < 0 or (first - p - 40) // 8 < SKILLS:
+            continue
+        second = body.find(name, first + 1, end)
+        third = body.find(name, second + 1, end) if second > 0 else -1
+        if third < 0:
+            return None
+        e = third + len(name)
+        if _u64(body, e) != 0 or _u64(body, e + 8) != 1:
+            return None
+        skills = [_u64(body, p + 40 + 8 * k) for k in range(SKILLS)]
+        dealt, taken, healing, gold = (_u64(body, e + 32 + 8 * k) for k in range(4))
+        if max(skills) > 200:
+            return None
+        players.append(
+            {"id": player_id, "skills": skills, "dealt": dealt, "taken": taken, "healing": healing, "gold": gold}
+        )
+    return players if len(players) == len(played) else None
+
+
 def attach_details(body: bytes, matches: list[Match]) -> int:
     """Fill in bans and position order from the detail records. Returns how many were linked."""
     champions = {c for mt in matches for c in mt.picks_a + mt.picks_b}
@@ -160,6 +204,9 @@ def attach_details(body: bytes, matches: list[Match]) -> int:
         bans_b, _ = _read_str_list(body, off)
         mt.bans_a, mt.bans_b = bans_a, bans_b
         mt.positions_a, mt.positions_b = played[:5], played[5:]
+        players = _read_players(body, played, h.end(), next_start)
+        if players:
+            mt.players_a, mt.players_b = players[:5], players[5:]
         linked += 1
     return linked
 
