@@ -6,7 +6,7 @@
  "bard": {"damage": "magic", "range": "ranged", "tags": ["buffer", "shred"]},
  "barrier_magician": {"damage": "magic", "range": "ranged", "tags": ["anti_projectile", "cc"]},
  "berserker": {"damage": "physical", "range": "melee", "tags": ["light_cc"]},
- "bomber": {"damage": "physical", "range": "ranged", "tags": []},
+ "bomber": {"damage": "physical", "range": "ranged", "tags": ["cc"]},
  "boomerang_hunter": {"damage": "physical", "range": "ranged", "tags": []},
  "cavalry_knight": {"damage": "physical", "range": "melee", "tags": ["cc"]},
  "chef": {"damage": "mixed", "range": "melee", "tags": ["frontline", "healing"]},
