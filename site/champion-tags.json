@@ -60,7 +60,7 @@
  "spirit_caller": {"damage": "magic", "range": "ranged", "tags": ["buffer", "healing", "light_cc", "shield", "shred"]},
  "strongman": {"damage": "physical", "range": "melee", "tags": ["frontline", "cc"]},
  "swordman": {"damage": "physical", "range": "melee", "tags": []},
- "taoist": {"damage": "magic", "range": "ranged", "tags": []},
+ "taoist": {"damage": "magic", "range": "ranged", "tags": ["cc", "debuffer", "shred", "silence"]},
  "vampire": {"damage": "mixed", "range": "melee", "tags": ["healing"]},
  "voodoo_shaman": {"damage": "magic", "range": "ranged", "tags": ["cc"]},
  "werewolf": {"damage": "physical", "range": "melee", "tags": []},
