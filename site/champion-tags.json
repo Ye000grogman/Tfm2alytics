@@ -43,7 +43,7 @@
  "necromancer": {"damage": "magic", "range": "ranged", "tags": ["revive"]},
  "nightmare": {"damage": "physical", "range": "melee", "tags": []},
  "ninja": {"damage": "physical", "range": "melee", "tags": []},
- "ogre": {"damage": "physical", "range": "melee", "tags": ["cc"]},
+ "ogre": {"damage": "physical", "range": "melee", "tags": ["cc", "frontline", "stacking"]},
  "plague_doctor": {"damage": "physical", "range": "ranged", "tags": []},
  "poison_dart_hunter": {"damage": "physical", "range": "ranged", "tags": []},
  "pole_warrior": {"damage": "physical", "range": "melee", "tags": ["frontline"]},
