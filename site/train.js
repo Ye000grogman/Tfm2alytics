@@ -32,7 +32,7 @@ const Train = (() => {
   function compFeatures(team, enemies, tags) {
     if (!team.length) return [];
     const count = (list) => {
-      const n = { magic: 0, physical: 0, cc: 0, front: 0, sustain: 0, ranged: 0, antiHeal: 0, shred: 0, buffer: 0, cdr: 0, antiProjectile: 0, ccImmunity: 0, healing: 0 };
+      const n = { magic: 0, physical: 0, cc: 0, front: 0, sustain: 0, ranged: 0, antiHeal: 0, shred: 0, buffer: 0, cdr: 0, antiProjectile: 0, ccImmunity: 0, healing: 0, shields: 0, antiShield: 0 };
       for (const c of list) {
         const t = tags[c];
         if (!t) continue;
@@ -53,11 +53,13 @@ const Train = (() => {
         if (t.tags.includes("cdr")) n.cdr++;
         if (t.tags.includes("anti_projectile")) n.antiProjectile++;
         if (t.tags.includes("cc_immunity")) n.ccImmunity++;
+        if (t.tags.includes("shield")) n.shields++;
+        if (t.tags.includes("anti_shield")) n.antiShield++;
         if (t.range === "ranged") n.ranged++;
       }
       return n;
     };
-    const { magic, physical, cc, front, sustain, ranged, antiHeal, shred, buffer, cdr, antiProjectile, ccImmunity } = count(team);
+    const { magic, physical, cc, front, sustain, ranged, antiHeal, shred, buffer, cdr, antiProjectile, ccImmunity, antiShield } = count(team);
     const foe = count(enemies);
     const share = team.length / 5;
     const out = [];
@@ -77,6 +79,7 @@ const Train = (() => {
     on("buffer_with_cdr", buffer > 0 && cdr > 0);
     on("anti_projectile_vs_ranged", antiProjectile > 0 && foe.ranged >= 3);
     on("cc_immunity_vs_cc", ccImmunity > 0 && foe.cc >= 3);
+    on("no_anti_shield_vs_shields", antiShield === 0 && foe.shields >= 2);
     return out;
   }
 
