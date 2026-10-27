@@ -14,9 +14,10 @@ Needs Python 3.10+ and nothing else. On Windows, double-click `start.bat`, or ru
 python -m tfm2alytics.serve
 ```
 
-This reads every save in the game's save folder, opens the site at `http://127.0.0.1:8642/site/`,
-and keeps watching the folder. Whenever the game writes a save, the save is re-read and any open page
-refreshes its numbers within about 15 seconds, without losing your filters or the draft in progress.
+This reads every save in the game's save folder and opens the site at `http://127.0.0.1:8642/site/`.
+After a game, **press `R` on the site** (or click "Check for new saves"). If the game wrote a save since the last
+check, that save is re-read and the page reloads its numbers, keeping your filters and the draft in progress. If
+nothing changed, nothing happens.
 "Latest save" in the save picker always follows the newest save. Everything runs on your PC.
 
 To extract without the site: `python -m tfm2alytics.extract [save file or folder] -o data`.

@@ -111,3 +111,31 @@ def test_needs_extract_tracks_newer_saves(tmp_path):
     assert not needs_extract(save, out)
     os.utime(save, (4_000_000_000, 4_000_000_000))  # the game wrote the save again
     assert needs_extract(save, out)
+
+
+def test_refresh_only_extracts_changed_saves(tmp_path, monkeypatch):
+    import os
+
+    from tfm2alytics import serve
+
+    monkeypatch.setattr(serve, "wait_until_written", lambda save: None)
+    saves = tmp_path / "saves"
+    saves.mkdir()
+    save = saves / "save_1.data"
+    save.write_bytes(b"TFM2\x00\x0fAbyssal Eclipse" + b"IEND\xae\x42\x60\x82" + gzip.compress(make_body()))
+    os.utime(save, (1_000, 1_000))
+    refresher = serve.Refresher(saves, tmp_path / "data")
+    (tmp_path / "data").mkdir()
+
+    assert refresher.run()["updated"] == ["save_1.data"]
+    assert (tmp_path / "data" / "index.json").exists()
+    assert refresher.run()["updated"] == []  # nothing new: R does nothing
+    os.utime(save, (4_000_000_000, 4_000_000_000))  # the game saved again
+    assert refresher.run()["updated"] == ["save_1.data"]
+
+
+def test_refresh_without_save_folder_reports_it(tmp_path):
+    from tfm2alytics import serve
+
+    result = serve.Refresher(None, tmp_path).run()
+    assert not result["ok"] and "Save folder" in result["error"]

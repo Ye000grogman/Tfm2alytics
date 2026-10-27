@@ -129,6 +129,17 @@ th.sorted[data-dir="asc"]::after { content: " ▴"; }
   cursor: pointer;
 }
 .button:hover { border-color: var(--accent); }
+.button:disabled { opacity: 0.6; cursor: progress; }
+kbd {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font: 11px/16px ui-monospace, monospace;
+  color: var(--muted);
+}
 
 /* Draft helper */
 .draft-layout {

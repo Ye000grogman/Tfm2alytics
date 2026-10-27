@@ -65,11 +65,11 @@ it and pulls out every match. The console shows a line per save, like:
 
 ```
 save_20261022_220834.data: 10077 matches (10054 with bans), 67 champions, 120 teams -> data\save_20261022_220834.json
-Watching C:\Users\<you>\AppData\Roaming\TeamSamoyed\TeamfightManager2\data for new saves
+Reading saves from C:\Users\<you>\AppData\Roaming\TeamSamoyed\TeamfightManager2\data. Press R on the site to check for new saves.
 Stats site running at http://127.0.0.1:8642/site/ (Ctrl+C to stop)
 ```
 
-**Keep the console window open while you use the site.** Closing it stops the site and the auto-update.
+**Keep the console window open while you use the site.** Closing it stops the site.
 
 > Windows may show a "Windows protected your PC" warning the first time you run `start.bat`.
 > Click **More info**, then **Run anyway**. The script only starts Python with this tool.
@@ -81,19 +81,21 @@ Stats site running at http://127.0.0.1:8642/site/ (Ctrl+C to stop)
 - **Draft** tab: choose the patch to take stats from (default: newest) and who picks first, then follow the in-game draft.
   The highlighted slot is the next turn. Click a suggestion or any champion to fill it, and click any slot to change it.
 
-### Does it update after a game?
+### Updating the stats after a game
 
-**Yes, as long as the console window is open.** The tool checks the game's save folder every 5 seconds.
-When the game writes a save file, the tool:
+**Press `R` on the site** (or click **Check for new saves** at the top). The tool then:
 
-1. waits until the file has finished writing,
-2. re-reads it (about 6 seconds),
-3. tells any open page, which refreshes within about 10 seconds. Your filters, selected champion and draft in progress are kept.
+1. looks at the game's save folder for saves written since the last check,
+2. if there are none, does nothing and shows *"no new saves"*,
+3. if there are, waits until the game has finished writing the file, re-reads it (about 6 seconds), and reloads the page's numbers.
+   Your filters, selected champion and draft in progress are kept, and the line under the save picker shows *"updated just now"*.
 
-The bottom line under the save picker shows *"Data from save at 22:51 · just updated"* when this happens.
+Nothing is checked in the background between presses. On start, the tool also picks up any saves that changed while it was closed.
 
-The site can only be as fresh as the last save the game wrote to disk. If a game you just played doesn't show up,
-**save the game** (or let it autosave) and the site follows. *Latest save* in the picker always shows the most
+`R` works on both tabs, but not while you're typing in a search box.
+
+The site can only be as fresh as the last save the game wrote to disk. If a game you just played doesn't show up
+after pressing `R`, **save the game** (or let it autosave) and press `R` again. *Latest save* in the picker always shows the most
 recently written save file, so new save files are picked up too.
 
 ## 6. Updating Tfm2alytics
@@ -109,10 +111,11 @@ Then start `start.bat` again.
 |---|---|
 | `start.bat` says *Python was not found* | Re-run the Python installer, choose **Modify**, and make sure **Add Python to environment variables** is ticked. Or reinstall and tick **Add python.exe to PATH**. Then open a *new* console. |
 | `python --version` shows 3.9 or older | Install a newer Python from python.org. |
-| Console says *Save folder not found, so not watching* | Your saves are somewhere else. Find the folder with your `.data` files and start with `start.bat --saves "D:\path\to\folder"`. |
+| Console or site says *Save folder not found* | Your saves are somewhere else. Find the folder with your `.data` files and start with `start.bat --saves "D:\path\to\folder"`. |
 | Site says *Couldn't read data/index.json* | The site was opened directly as a file. Open it through the console's address, <http://127.0.0.1:8642/site/>, instead. |
 | *Address already in use* / port error | Tfm2alytics is already running in another window. Use that one, or start with `start.bat --port 8650`. |
-| *couldn't read yet ... will retry* in the console | The game was still writing the save. It retries automatically and needs no action. |
+| Site says *Couldn't read ... yet* | The game was still writing the save. Wait a moment and press `R` again. |
+| Site says *Couldn't reach the server* | The console window was closed. Start `start.bat` again. |
 | A recent game is missing | Save the game (step 5). The tool can't see games that aren't in a save file yet. |
 | Numbers look wrong after a game update | The save format may have changed. Note your game version (shown on the Stats tab) and report it. |
 | Browser didn't open | Open <http://127.0.0.1:8642/site/> yourself. |
@@ -123,11 +126,9 @@ You can add these after `start.bat`, or after `python -m tfm2alytics.serve` in a
 
 | Option | What it does |
 |---|---|
-| `--saves "<folder>"` | Watch a different save folder |
+| `--saves "<folder>"` | Read saves from a different folder |
 | `--port 8650` | Use a different port |
 | `--no-browser` | Don't open a browser tab on start |
-| `--no-watch` | Serve existing data only, no auto-update |
-| `--interval 10` | Check for new saves every 10 seconds instead of 5 |
 
 ## 8. Where things are
 

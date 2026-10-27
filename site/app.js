@@ -17,6 +17,7 @@ function init() {
   SaveFeed.start({
     select: $("save-select"),
     status: $("save-info"),
+    button: $("refresh"),
     onLoad: setDataset,
     onError: showEmpty,
   });

@@ -1,15 +1,17 @@
-"""Command line: open the stats site in your browser and keep it up to date.
+"""Command line: open the stats site in your browser.
 
     python -m tfm2alytics.serve
 
 Serves the site/ and data/ folders on localhost. Nothing leaves your PC.
-While it runs, it watches the game's save folder: whenever the game writes a
-save, that save is extracted again and the open site reloads its numbers.
+On start, any save newer than its extracted data is extracted. After that,
+saves are only checked when you ask: press R on the site (or click
+"Check for new saves"), which calls POST /api/refresh.
 """
 
 import argparse
 import functools
 import http.server
+import json
 import sys
 import threading
 import time
@@ -21,8 +23,57 @@ from .extract import default_save_dir, extract_save, write_index
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def needs_extract(save: Path, out: Path) -> bool:
+    json_path = out / f"{save.stem}.json"
+    return not json_path.exists() or json_path.stat().st_mtime < save.stat().st_mtime
+
+
+def wait_until_written(save: Path, timeout: float = 30) -> None:
+    """Wait until the save stops changing, so we don't read it while the game writes it."""
+    deadline = time.monotonic() + timeout
+    last = None
+    while time.monotonic() < deadline:
+        stat = save.stat()
+        current = (stat.st_size, stat.st_mtime)
+        if current == last:
+            return
+        last = current
+        time.sleep(1)
+
+
+class Refresher:
+    """Extracts saves that changed since the last extraction. One run at a time."""
+
+    def __init__(self, save_dir: Path | None, out: Path):
+        self.save_dir = save_dir
+        self.out = out
+        self.lock = threading.Lock()
+
+    def run(self) -> dict:
+        if self.save_dir is None:
+            return {"ok": False, "error": "Save folder not found. Start with --saves <folder>."}
+        with self.lock:
+            saves = sorted(self.save_dir.glob("*.data"))
+            stale = [s for s in saves if needs_extract(s, self.out)]
+            updated, failed = [], []
+            for save in stale:
+                try:
+                    wait_until_written(save)
+                    extract_save(save, self.out)
+                    updated.append(save.name)
+                except Exception as err:  # e.g. the game is still writing it
+                    print(f"{save.name}: couldn't read ({err})", file=sys.stderr)
+                    failed.append(save.name)
+            if updated or not (self.out / "index.json").exists():
+                write_index(self.out)
+            if updated:
+                print(f"{time.strftime('%H:%M:%S')} updated {', '.join(updated)}", file=sys.stderr)
+            return {"ok": not failed, "checked": len(saves), "updated": updated, "failed": failed}
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     data_dir: Path = ROOT / "data"
+    refresher: Refresher | None = None
 
     def translate_path(self, path):
         # /data/... comes from the output folder, wherever it is; the rest from the repo.
@@ -31,66 +82,39 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return str(self.data_dir / Path(rel).name)
         return super().translate_path(path)
 
+    def do_POST(self):
+        if self.path.split("?")[0] != "/api/refresh":
+            self.send_error(404)
+            return
+        body = json.dumps(self.refresher.run()).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def log_message(self, format, *args):
         pass  # keep the console for extraction messages
-
-
-def needs_extract(save: Path, out: Path) -> bool:
-    json_path = out / f"{save.stem}.json"
-    return not json_path.exists() or json_path.stat().st_mtime < save.stat().st_mtime
-
-
-def watch(save_dir: Path, out: Path, interval: float) -> None:
-    """Re-extract saves the game has written since the last extraction."""
-    pending: dict[Path, float] = {}  # save -> size+mtime seen last tick
-    while True:
-        try:
-            changed = False
-            for save in sorted(save_dir.glob("*.data")):
-                if not needs_extract(save, out):
-                    continue
-                stat = save.stat()
-                signature = stat.st_size + stat.st_mtime
-                # Wait one tick with no change so we don't read a save mid-write.
-                if pending.get(save) != signature:
-                    pending[save] = signature
-                    continue
-                try:
-                    extract_save(save, out)
-                    changed = True
-                except Exception as err:  # e.g. the game is still writing it
-                    print(f"{save.name}: couldn't read yet ({err}), will retry", file=sys.stderr)
-                pending.pop(save, None)
-            if changed:
-                write_index(out)
-                print(f"{time.strftime('%H:%M:%S')} data updated, the site will refresh", file=sys.stderr)
-        except OSError as err:
-            print(f"watching {save_dir} failed: {err}", file=sys.stderr)
-        time.sleep(interval)
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Serve the TFM2 stats site locally.")
     parser.add_argument("--port", type=int, default=8642)
     parser.add_argument("--no-browser", action="store_true", help="don't open a browser tab")
-    parser.add_argument("--saves", type=Path, default=default_save_dir(), help="save folder to watch")
+    parser.add_argument("--saves", type=Path, default=default_save_dir(), help="the game's save folder")
     parser.add_argument("--out", type=Path, default=ROOT / "data", help="where extracted data goes")
-    parser.add_argument("--interval", type=float, default=5, help="seconds between save folder checks")
-    parser.add_argument("--no-watch", action="store_true", help="don't watch for new saves")
     args = parser.parse_args(argv)
 
     args.out.mkdir(parents=True, exist_ok=True)
-    if args.saves and not args.no_watch:
-        stale = [s for s in sorted(args.saves.glob("*.data")) if needs_extract(s, args.out)]
-        for save in stale:
-            extract_save(save, args.out)
-        write_index(args.out)
-        threading.Thread(target=watch, args=(args.saves, args.out, args.interval), daemon=True).start()
-        print(f"Watching {args.saves} for new saves")
-    elif not args.no_watch:
-        print("Save folder not found, so not watching. Pass --saves <folder> to enable auto-update.")
+    refresher = Refresher(args.saves, args.out)
+    if args.saves:
+        refresher.run()
+        print(f"Reading saves from {args.saves}. Press R on the site to check for new saves.")
+    else:
+        print("Save folder not found. Pass --saves <folder> to read your saves.")
 
     Handler.data_dir = args.out.resolve()
+    Handler.refresher = refresher
     handler = functools.partial(Handler, directory=str(ROOT))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     url = f"http://127.0.0.1:{args.port}/site/"
