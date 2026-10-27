@@ -20,7 +20,7 @@
  "druid": {"damage": "mixed", "range": "ranged", "tags": ["frontline"]},
  "dual_blader": {"damage": "physical", "range": "melee", "tags": ["cc", "strong_cc"]},
  "enchanter": {"damage": "magic", "range": "ranged", "tags": ["buffer", "cc_immunity"]},
- "executioner": {"damage": "physical", "range": "melee", "tags": []},
+ "executioner": {"damage": "physical", "range": "melee", "tags": ["anti_heal", "cc"]},
  "exorcist": {"damage": "physical", "range": "melee", "tags": ["frontline"]},
  "fighter": {"damage": "physical", "range": "melee", "tags": ["cc"]},
  "gambler": {"damage": "physical", "range": "ranged", "tags": []},
