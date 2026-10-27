@@ -2,9 +2,9 @@
 importScripts("stats.js", "draft.js", "train.js");
 
 onmessage = (e) => {
-  const { dataset, tags } = e.data;
+  const { dataset, tags, extra } = e.data;
   try {
-    const model = Train.train(dataset, tags, (progress) => postMessage({ progress }));
+    const model = Train.train(dataset, tags, (progress) => postMessage({ progress }), { extra: extra || [] });
     postMessage({ model });
   } catch (err) {
     postMessage({ error: String(err && err.message ? err.message : err) });

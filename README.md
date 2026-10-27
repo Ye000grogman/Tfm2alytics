@@ -52,16 +52,27 @@ Without a trained model, the basic helper below is used.
 The model is a logistic regression (`site/train.js`). Each game is described by its features, counted for team A and against team B:
 
 - **Champion strength**, with a step per patch. Steps carry over to later patches, so a fresh patch starts from the last one.
-- **Patch notes**: +1 per buff and -1 per nerf a champion got, summed up to the patch.
+- **Patch notes**: +1 per buff and -1 per nerf a champion got, summed up to the patch, plus how big the changes were
+  (the size of each stat change, grouped into damage, tankiness, cooldowns and other).
+- **Fight stats**: the team's share of gold and damage in the champion's games on recent patches. It's less noisy than wins, so it
+  settles with fewer games. A game is always left out of its own average.
 - **Synergy** for every pair on a team and **counters** for every pair across teams.
 - **Team composition** from `site/champion-tags.json`: no magic or physical damage, no CC or lots of it, frontline, healing and shields,
   range, anti-heal vs healing, shred vs frontline, projectile blocking vs ranged, buffers with cooldown-hungry champions.
-- **Team strength** per year, during training only, so strong teams don't make their champions look better than they are.
-  Suggestions never use it.
+- **Context**, during training only, so strong teams and players don't make their champions look better than they are:
+  team strength per year, player strength per year, the players' skill ratings at the time of the game, team A's side advantage
+  and who won the previous game of the series. Suggestions never use any of it.
 
 Each group has its own penalty that pulls weights with little data toward zero. Training holds back the newest 15% of games, trains on
-the rest and reports how often it picks the winner from the draft alone, next to the basic helper. Then it trains again on everything.
+the rest and reports how often it picks the winner from the draft alone, next to the basic helper and the model with context. It also
+checks the win chances: the draft-alone chances get one scale factor, fitted on the held-back games, so a "70%" draft wins about 70% of
+the time. Then it trains again on everything.
 `node tools/train.js data/<save>.json` does the same from the command line.
+
+**Use other saves (test)**: tick it before Train to also learn from the other saves in `data/`. Games already in this save are skipped,
+so an older save of the same league adds nothing. The report compares the result with and without them on the same test games, and
+the model is saved with them. Untick and train again to go back. From the command line:
+`node tools/train.js data/<save>.json --extra data/<other>.json`.
 
 Suggestions list every reason in win-chance points (strength, patch notes, each ally and enemy, composition, the opponent's habits).
 Your picks look one turn ahead when the enemy picks next: each candidate is judged after the enemy's best answer, which is shown.
@@ -113,6 +124,8 @@ Needs Python 3.10+ and nothing else.
 - Team table: id and name for every team in the save.
 - Patch notes: one record per balance patch with every champion change (before, after, buff or nerf), the reasons, new champions and game rule changes. Details in `tfm2alytics/patches.py`.
 - Match details: bans and per-player blocks. These have no match id, so they're linked to summaries by the set of ten picked champions.
+  Each player block holds the player's id, 8 skill ratings at the time of the game, and their damage dealt and taken, healing and
+  gold in that game (read for about 98% of games; the data JSON is format 3 and about 15 MB).
 
 Details and open questions are in `tfm2alytics/matches.py`.
 

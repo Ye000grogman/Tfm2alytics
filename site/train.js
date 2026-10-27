@@ -2,26 +2,48 @@
 // web worker and in Node (tools/train.js, tests).
 //
 // The model is a logistic regression: P(team A wins) = logistic(sum of weights of
-// the draft's features), each feature counted +1 for team A and -1 for team B.
-// Feature groups:
+// the game's features), each feature counted +1 for team A and -1 for team B.
+// Draft feature groups (used in suggestions):
 //   champ      a champion's overall strength
 //   step       how a champion's strength moved at a patch; it carries over to later
 //              patches, so a new patch with few games starts from the last one
-//   notes      the game's patch notes: +1 per buff, -1 per nerf, summed up to the patch
+//   notes      the game's patch notes: +1 per buff, -1 per nerf, summed up to the
+//              patch, plus how big the stat changes were (damage, tankiness, cooldowns)
+//   perf       fight stats: the team's share of gold and damage in the champion's
+//              recent games. Less noisy than wins, so it settles with fewer games.
 //   pair       two champions on the same team (synergy)
 //   vs         one champion facing another (counter)
 //   comp       team composition from champion tags: lacking magic damage, no CC, ...
-//   team       team strength per year. Only used in training, so strong teams don't
-//              make their champions look better than they are; never in suggestions.
+// Context groups, only used in training, so strong teams and players don't make
+// their champions look better than they are; never in suggestions:
+//   team       team strength per year
+//   player     player strength per year
+//   skill      the players' skill ratings at the time of the game
+//   side       team A's side advantage
+//   series     who won the previous game of the same series
 // Every group has its own L2 penalty, which pulls weights with few games toward 0.
 
 const Train = (() => {
-  const PENALTY = { champ: 5, step: 10, notes: 1, pair: 500, vs: 500, comp: 30, team: 5 };
+  const PENALTY = {
+    champ: 5, step: 10, notes: 1, perf: 1, pair: 500, vs: 500, comp: 30,
+    team: 10, player: 100, skill: 1, side: 1, series: 1,
+  };
   const ROUNDS = 60;
   const DAMPING = 0.3; // how much of a row's other features to assume move with each step
   const HALF_LIFE_PATCHES = 4; // older patches count less
   const HOLDOUT = 0.15; // newest games kept aside to test on
-  const DRAFT_GROUPS = ["champ", "step", "notes", "pair", "vs", "comp"];
+  const DRAFT_GROUPS = ["champ", "step", "notes", "perf", "pair", "vs", "comp"];
+  const CONTEXT_GROUPS = ["team", "player", "skill", "side", "series"];
+  const PERF_HALF_LIFE = 1; // patches
+  const PERF_SMOOTH = 10; // games of weight pulling a champion's fight stats toward average
+  const PERF_SCALE = 10;
+  // Patch-note stats by what they change. Growth per level counts with its stat.
+  const STAT_KIND = {
+    attack: "damage", attack_coef: "damage", ap_coef: "damage", magic_power: "damage", attack_speed: "damage",
+    hp: "tank", defence: "tank", magic_resistance: "tank",
+    cooltime: "cooldown",
+  };
+  const NOTE_KINDS = ["damage", "tank", "cooldown", "other"];
 
   const sigmoid = (x) => 1 / (1 + Math.exp(-x));
   const groupOf = (name) => name.slice(0, name.indexOf(":"));
@@ -83,37 +105,119 @@ const Train = (() => {
     return out;
   }
 
-  // Patch context: which patches come before which, and the patch-note score of
-  // each champion up to each patch.
+  // How big one patch-note change is: the log of after/before, positive for a buff.
+  function changeSize(change) {
+    const before = parseFloat(change.before);
+    const after = parseFloat(change.after);
+    if (!(before > 0) || !(after > 0)) return 0;
+    const size = Math.min(1, Math.abs(Math.log(after / before)));
+    return change.buff ? size : -size;
+  }
+
+  const statKind = (stat) => STAT_KIND[stat.replace(/^growth_/, "")] || "other";
+
+  // Patch context: which patches come before which, and each champion's patch
+  // notes up to each patch: the buff/nerf score and the summed size per kind.
   function patchContext(dataset) {
     const versions = new Set(dataset.matches.map((m) => m.patch));
     for (const n of dataset.patch_notes || []) versions.add(n.version);
     const patches = [...versions].sort(Stats.comparePatch);
-    const notesAt = new Map(); // patch -> Map(champion -> cumulative buff/nerf score)
+    const notesAt = new Map(); // patch -> Map(champion -> { score, damage, tank, cooldown, other })
     const running = new Map();
     const byVersion = new Map((dataset.patch_notes || []).map((n) => [n.version, n]));
     for (const p of patches) {
       const note = byVersion.get(p);
       if (note) {
         for (const [c, changes] of Object.entries(note.changes)) {
+          const now = { ...(running.get(c) || { score: 0, damage: 0, tank: 0, cooldown: 0, other: 0 }) };
           const buffs = changes.filter((x) => x.buff).length;
-          running.set(c, (running.get(c) || 0) + (buffs - (changes.length - buffs)) / changes.length);
+          now.score += (buffs - (changes.length - buffs)) / changes.length;
+          for (const ch of changes) now[statKind(ch.stat)] += changeSize(ch);
+          running.set(c, now);
         }
       }
-      notesAt.set(p, new Map(running));
+      notesAt.set(p, new Map([...running].map(([c, v]) => [c, { ...v }])));
     }
-    return { patches, notesAt };
+    return { patches, notesAt, index: new Map(patches.map((p, i) => [p, i])), ns: "" };
   }
 
-  // Features of one team (positive side), as [name, value] pairs.
-  function teamFeatures(team, enemies, patch, ctx, tags) {
+  // A game's gold and damage split: team A's share minus a half (negative when B
+  // got more). Null when the save didn't have every player's stats.
+  function fightShares(m) {
+    if (!m.players_a || m.players_a.length !== 5 || !m.players_b || m.players_b.length !== 5) return null;
+    const total = (list, key) => list.reduce((t, p) => t + p[key], 0);
+    const share = (key) => {
+      const a = total(m.players_a, key);
+      const b = total(m.players_b, key);
+      return a + b > 0 ? a / (a + b) - 0.5 : 0;
+    };
+    return { gold: share("gold"), damage: share("dealt") };
+  }
+
+  // Each champion's fight stats per patch, from the given games: recent patches
+  // count more, and a champion with few games is pulled toward average.
+  function perfTable(matches, ctx) {
+    const per = ctx.patches.map(() => new Map()); // patch index -> champion -> sums
+    const add = (i, c, gold, damage) => {
+      const t = per[i].get(c) || { gold: 0, damage: 0, n: 0 };
+      t.gold += gold;
+      t.damage += damage;
+      t.n += 1;
+      per[i].set(c, t);
+    };
+    for (const m of matches) {
+      const s = fightShares(m);
+      if (!s) continue;
+      const i = ctx.index.get(m.patch);
+      for (const c of m.picks_a) add(i, c, s.gold, s.damage);
+      for (const c of m.picks_b) add(i, c, -s.gold, -s.damage);
+    }
+    const decay = Math.pow(0.5, 1 / PERF_HALF_LIFE);
+    const at = [];
+    let running = new Map();
+    for (let i = 0; i < ctx.patches.length; i++) {
+      const next = new Map();
+      for (const [c, t] of running) next.set(c, { gold: t.gold * decay, damage: t.damage * decay, n: t.n * decay });
+      for (const [c, t] of per[i]) {
+        const r = next.get(c) || { gold: 0, damage: 0, n: 0 };
+        next.set(c, { gold: r.gold + t.gold, damage: r.damage + t.damage, n: r.n + t.n });
+      }
+      at.push(next);
+      running = next;
+    }
+    return at;
+  }
+
+  // A champion's fight-stat features on a patch. `own` takes the game being
+  // trained on out of its own average, so the model can't peek at the result.
+  function perfFeatures(table, ctx, c, patch, own) {
+    const t = table && table[ctx.index.get(patch)] && table[ctx.index.get(patch)].get(c);
+    if (!t) return [];
+    let { gold, damage, n } = t;
+    if (own) {
+      gold -= own.gold;
+      damage -= own.damage;
+      n -= 1;
+    }
+    const k = PERF_SCALE / (Math.max(0, n) + PERF_SMOOTH);
+    return [["perf:gold", gold * k], ["perf:damage", damage * k]];
+  }
+
+  // Features of one team (positive side), as [name, value] pairs. `own` is the
+  // team's fight shares in this game when it's part of the fight-stat table.
+  function teamFeatures(team, enemies, patch, ctx, tags, own = null) {
     const out = [];
-    const upTo = ctx.patches.slice(0, ctx.patches.indexOf(patch) + 1);
+    const upTo = ctx.patches.slice(0, ctx.index.get(patch) + 1);
     const notes = ctx.notesAt.get(patch) || new Map();
     for (const c of team) {
       out.push([`champ:${c}`, 1]);
-      for (const p of upTo.slice(1)) out.push([`step:${c}@${p}`, 1]);
-      if (notes.get(c)) out.push(["notes:score", notes.get(c)]);
+      for (const p of upTo.slice(1)) out.push([`step:${c}@${p}${ctx.ns}`, 1]);
+      const note = notes.get(c);
+      if (note) {
+        if (note.score) out.push(["notes:score", note.score]);
+        for (const kind of NOTE_KINDS) if (note[kind]) out.push([`notes:${kind}`, note[kind]]);
+      }
+      out.push(...perfFeatures(ctx.perf, ctx, c, patch, own));
       for (const d of team) if (c < d) out.push([`pair:${c}+${d}`, 1]);
       for (const d of enemies) out.push(c < d ? [`vs:${c}>${d}`, 1] : [`vs:${d}>${c}`, -1]);
     }
@@ -122,19 +226,45 @@ const Train = (() => {
     return out.concat(compFeatures(team, enemies, tags));
   }
 
+  // Context of a game that the draft can't change: teams, players, side, series.
+  function contextFeatures(m, ctx) {
+    const year = m.patch.split(".")[0];
+    const out = [
+      [`team:${m.team_a}@${year}${ctx.ns}`, 1],
+      [`team:${m.team_b}@${year}${ctx.ns}`, -1],
+      ["side:a", 1],
+    ];
+    if (m.players_a && m.players_a.length === 5 && m.players_b && m.players_b.length === 5) {
+      let skill = 0;
+      for (const p of m.players_a) {
+        out.push([`player:${p.id}@${year}${ctx.ns}`, 1]);
+        skill += p.skills.reduce((t, x) => t + x, 0);
+      }
+      for (const p of m.players_b) {
+        out.push([`player:${p.id}@${year}${ctx.ns}`, -1]);
+        skill -= p.skills.reduce((t, x) => t + x, 0);
+      }
+      out.push(["skill:sum", skill / 100]);
+    }
+    const prev = ctx.previous && ctx.previous.get(m);
+    if (prev) {
+      const prevWinner = prev.winner === "a" ? prev.team_a : prev.team_b;
+      out.push(["series:prev", prevWinner === m.team_a ? 1 : -1]);
+    }
+    return out;
+  }
+
   // One match as a sparse row: team A's features minus team B's.
-  function matchRow(m, ctx, tags, withTeams) {
+  function matchRow(m, ctx, tags, withContext) {
     const sum = new Map();
     const add = (list, sign) => {
       for (const [k, v] of list) sum.set(k, (sum.get(k) || 0) + sign * v);
     };
-    add(teamFeatures(m.picks_a, m.picks_b, m.patch, ctx, tags), 1);
-    add(teamFeatures(m.picks_b, m.picks_a, m.patch, ctx, tags), -1);
-    if (withTeams) {
-      const year = m.patch.split(".")[0];
-      add([[`team:${m.team_a}@${year}`, 1]], 1);
-      add([[`team:${m.team_b}@${year}`, 1]], -1);
-    }
+    const own = ctx.perfGames && ctx.perfGames.has(m) ? fightShares(m) : null;
+    const flip = own && { gold: -own.gold, damage: -own.damage };
+    add(teamFeatures(m.picks_a, m.picks_b, m.patch, ctx, tags, own), 1);
+    add(teamFeatures(m.picks_b, m.picks_a, m.patch, ctx, tags, flip), -1);
+    if (withContext) add(contextFeatures(m, ctx), 1);
     for (const [k, v] of sum) if (Math.abs(v) < 1e-9) sum.delete(k);
     return sum;
   }
@@ -197,8 +327,25 @@ const Train = (() => {
     return { weights, bias };
   }
 
+  // The draft alone explains less than the whole model, so its logit runs too
+  // confident when the context is left out. One scale factor fitted on games the
+  // model wasn't trained on brings its win chances back in line.
+  function fitScale(z, labels) {
+    let a = 1;
+    for (let round = 0; round < 20; round++) {
+      let g = 0, h = 1e-9;
+      z.forEach((x, i) => {
+        const p = sigmoid(a * x);
+        g += (p - labels[i]) * x;
+        h += p * (1 - p) * x * x;
+      });
+      a -= g / h;
+    }
+    return Math.max(0.1, Math.min(1.5, a));
+  }
+
   function sampleWeight(m, ctx) {
-    const age = ctx.patches.length - 1 - ctx.patches.indexOf(m.patch);
+    const age = ctx.patches.length - 1 - ctx.index.get(m.patch);
     return Math.pow(0.5, age / HALF_LIFE_PATCHES);
   }
 
@@ -209,48 +356,159 @@ const Train = (() => {
     return z;
   }
 
-  // Train on the older games, test on the newest ones, then train again on everything.
-  function train(dataset, tags, onProgress = () => {}, opts = {}) {
-    const ctx = patchContext(dataset);
-    const matches = [...dataset.matches].sort((a, b) => a.id - b.id);
-    const split = Math.floor(matches.length * (1 - HOLDOUT));
-    const rows = matches.map((m) => matchRow(m, ctx, tags, opts.teams !== false));
-    const labels = matches.map((m) => (m.winner === "a" ? 1 : 0));
-    const weights = matches.map((m) => sampleWeight(m, ctx));
+  // The game just before in the same series: the previous match id between the
+  // same two teams.
+  function seriesLinks(matches) {
+    const links = new Map();
+    for (let i = 1; i < matches.length; i++) {
+      const a = matches[i - 1];
+      const b = matches[i];
+      const same = (a.team_a === b.team_a && a.team_b === b.team_b) || (a.team_a === b.team_b && a.team_b === b.team_a);
+      if (same && b.id - a.id === 1) links.set(b, a);
+    }
+    return links;
+  }
 
-    const test = fit(rows.slice(0, split), labels.slice(0, split), weights.slice(0, split), (p) => onProgress(p / 2), opts);
-    if (opts.testOnly) return { report: null, test, rows, labels, split, matches };
-    const held = matches.slice(split);
-    const score = (groups) => {
-      let correct = 0, loss = 0;
-      held.forEach((m, i) => {
-        const p = sigmoid(logit(test.weights, rows[split + i], groups));
-        const won = labels[split + i];
-        if ((p > 0.5) === (won === 1)) correct++;
-        loss -= Math.log(Math.max(1e-9, won ? p : 1 - p));
-      });
-      return { accuracy: correct / held.length, logLoss: loss / held.length };
+  // A game's identity across saves: two saves of the same league share games.
+  const gameKey = (m) => `${m.patch}|${m.team_a}|${m.team_b}|${m.picks_a.join(",")}|${m.picks_b.join(",")}`;
+
+  // Prepared training data for one save: its games, patch context and rows.
+  function prepare(dataset, ns, skip) {
+    const ctx = { ...patchContext(dataset), ns };
+    const matches = [...dataset.matches].filter((m) => !skip || !skip.has(gameKey(m))).sort((a, b) => a.id - b.id);
+    ctx.previous = seriesLinks(matches);
+    return { ctx, matches };
+  }
+
+  // Rows for a set of training games and test games, with fight stats taken from
+  // the training games only.
+  function buildRows(parts, tags) {
+    for (const part of parts) {
+      part.ctx.perf = perfTable(part.train, part.ctx);
+      part.ctx.perfGames = new Set(part.train);
+    }
+    const rows = [], labels = [], weights = [];
+    for (const part of parts) {
+      for (const m of part.train) {
+        rows.push(matchRow(m, part.ctx, tags, true));
+        labels.push(m.winner === "a" ? 1 : 0);
+        weights.push(sampleWeight(m, part.ctx));
+      }
+    }
+    return { rows, labels, weights };
+  }
+
+  // How well predicted chances match what happened: games grouped by the
+  // favourite's predicted chance.
+  function calibration(probs, labels) {
+    const bins = [0.5, 0.55, 0.6, 0.65, 0.7, 0.8, 1.0001];
+    const out = bins.slice(0, -1).map((lo, i) => ({ from: lo, to: Math.min(1, bins[i + 1]), games: 0, predicted: 0, actual: 0 }));
+    let brier = 0;
+    probs.forEach((p, i) => {
+      brier += (p - labels[i]) ** 2;
+      const fav = Math.max(p, 1 - p);
+      const won = p >= 0.5 ? labels[i] : 1 - labels[i];
+      const bin = out.find((b) => fav >= b.from && fav < b.to) || out[out.length - 1];
+      bin.games++;
+      bin.predicted += fav;
+      bin.actual += won;
+    });
+    for (const b of out) {
+      if (b.games) {
+        b.predicted /= b.games;
+        b.actual /= b.games;
+      }
+    }
+    return { brier: probs.length ? brier / probs.length : null, bins: out.filter((b) => b.games) };
+  }
+
+  // Train on the older games, test on the newest ones, then train again on
+  // everything. `opts.extra` is a list of other saves' datasets to also learn
+  // from: the report then compares with and without them on the same test games.
+  function train(dataset, tags, onProgress = () => {}, opts = {}) {
+    const main = prepare(dataset, "");
+    const split = Math.floor(main.matches.length * (1 - HOLDOUT));
+    const held = main.matches.slice(split);
+    const seen = new Set(main.matches.map(gameKey));
+    const extras = (opts.extra || []).map((d, i) => {
+      const part = prepare(d, `#${i + 1}`, seen);
+      for (const m of part.matches) seen.add(gameKey(m));
+      return part;
+    });
+    const extraGames = extras.reduce((t, x) => t + x.matches.length, 0);
+    const steps = extraGames ? 3 : 2;
+    let step = 0;
+    const progress = (p) => onProgress((step + p) / steps);
+
+    const test = (withExtras) => {
+      const parts = [{ ctx: main.ctx, train: main.matches.slice(0, split) }];
+      if (withExtras) for (const x of extras) parts.push({ ctx: x.ctx, train: x.matches });
+      const data = buildRows(parts, tags);
+      const fitted = fit(data.rows, data.labels, data.weights, progress, opts);
+      step++;
+      const testRows = held.map((m) => matchRow(m, main.ctx, tags, true));
+      const labels = held.map((m) => (m.winner === "a" ? 1 : 0));
+      const score = (probs) => {
+        let correct = 0, loss = 0;
+        probs.forEach((p, i) => {
+          if ((p > 0.5) === (labels[i] === 1)) correct++;
+          loss -= Math.log(Math.max(1e-9, labels[i] ? p : 1 - p));
+        });
+        const n = held.length || 1;
+        return { accuracy: correct / n, logLoss: loss / n, calibration: calibration(probs, labels) };
+      };
+      const draftZ = testRows.map((row) => logit(fitted.weights, row, DRAFT_GROUPS));
+      const allZ = testRows.map((row) => logit(fitted.weights, row, [...DRAFT_GROUPS, ...CONTEXT_GROUPS]));
+      // The draft-only scale is tested fairly: fitted on every other test game,
+      // checked on the rest, and the other way round.
+      const half = (f) => draftZ.map((z, i) => (i % 2 === f ? null : z));
+      const scaleOf = (f) => {
+        const keep = half(f).map((z, i) => [z, labels[i]]).filter(([z]) => z !== null);
+        return fitScale(keep.map((x) => x[0]), keep.map((x) => x[1]));
+      };
+      const folds = [scaleOf(0), scaleOf(1)];
+      return {
+        draftOnly: score(draftZ.map((z, i) => sigmoid(folds[i % 2] * z))),
+        withContext: score(allZ.map(sigmoid)),
+        scale: fitScale(draftZ, labels),
+      };
     };
+    if (opts.testOnly) return test(Boolean(extraGames));
+
+    const alone = test(false);
+    const merged = extraGames ? test(true) : null;
+    const best = merged || alone;
     const report = {
       trainGames: split,
       testGames: held.length,
       testFrom: held.length ? held[0].patch : null,
-      draftOnly: score(DRAFT_GROUPS),
-      withTeams: score([...DRAFT_GROUPS, "team"]),
-      baseline: baselineAccuracy(matches.slice(0, split), held),
+      draftOnly: best.draftOnly,
+      withContext: best.withContext,
+      baseline: baselineAccuracy(main.matches.slice(0, split), held),
+      extra: extraGames ? { saves: extras.length, games: extraGames, without: alone } : null,
     };
 
-    const full = fit(rows, labels, weights, (p) => onProgress(0.5 + p / 2), opts);
-    const draftWeights = Object.fromEntries(Object.entries(full.weights).filter(([k]) => groupOf(k) !== "team"));
+    const parts = [{ ctx: main.ctx, train: main.matches }, ...extras.map((x) => ({ ctx: x.ctx, train: x.matches }))];
+    const data = buildRows(parts, tags);
+    const full = fit(data.rows, data.labels, data.weights, progress, opts);
+    const draftWeights = Object.fromEntries(
+      Object.entries(full.weights).filter(([k]) => DRAFT_GROUPS.includes(groupOf(k)) && !k.includes("#")),
+    );
+    const perfAt = {};
+    main.ctx.patches.forEach((p, i) => {
+      perfAt[p] = Object.fromEntries([...main.ctx.perf[i]].map(([c, t]) => [c, [t.gold, t.damage, t.n]]));
+    });
     return {
-      version: 1,
+      version: 2,
       trainedAt: Date.now() / 1000,
-      games: matches.length,
-      lastMatchId: matches.length ? matches[matches.length - 1].id : null,
-      patches: ctx.patches,
-      notesAt: Object.fromEntries([...ctx.notesAt].map(([p, m]) => [p, Object.fromEntries(m)])),
+      games: data.rows.length,
+      lastMatchId: main.matches.length ? main.matches[main.matches.length - 1].id : null,
+      patches: main.ctx.patches,
+      notesAt: Object.fromEntries([...main.ctx.notesAt].map(([p, m]) => [p, Object.fromEntries(m)])),
+      perfAt,
       tags,
       weights: draftWeights,
+      scale: best.scale,
       report,
     };
   }
@@ -279,9 +537,19 @@ const Train = (() => {
 
   function contextOf(model) {
     if (!model._ctx) {
+      // Version 1 models stored only the buff/nerf score per champion.
+      const note = (v) => (typeof v === "number" ? { score: v } : v);
+      const perfAt = model.perfAt || {};
       model._ctx = {
         patches: model.patches,
-        notesAt: new Map(Object.entries(model.notesAt).map(([p, m]) => [p, new Map(Object.entries(m))])),
+        index: new Map(model.patches.map((p, i) => [p, i])),
+        ns: "",
+        notesAt: new Map(
+          Object.entries(model.notesAt).map(([p, m]) => [p, new Map(Object.entries(m).map(([c, v]) => [c, note(v)]))]),
+        ),
+        perf: model.patches.map(
+          (p) => new Map(Object.entries(perfAt[p] || {}).map(([c, [gold, damage, n]]) => [c, { gold, damage, n }])),
+        ),
       };
     }
     return model._ctx;
@@ -316,7 +584,8 @@ const Train = (() => {
     const ctx = contextOf(model);
     const p = knownPatch(model, patch);
     const row = matchRow({ picks_a: mine, picks_b: theirs, patch: p }, ctx, model.tags, false);
-    return sigmoid(logit(model.weights, row, DRAFT_GROUPS) - meanStrength(model, p) * (mine.length - theirs.length));
+    const z = logit(model.weights, row, DRAFT_GROUPS) - meanStrength(model, p) * (mine.length - theirs.length);
+    return sigmoid((model.scale || 1) * z);
   }
 
   // What adding champion c to `mine` is worth, split into reasons. Values are in
@@ -343,18 +612,21 @@ const Train = (() => {
       delta.set(k, (delta.get(k) || 0) - ((theirsAfter.get(k) || 0) - (theirsBefore.get(k) || 0)));
     }
 
+    const k = model.scale || 1;
     const z0 =
-      logit(w, matchRow({ picks_a: mine, picks_b: theirs, patch: p }, ctx, model.tags, false), DRAFT_GROUPS) -
-      meanStrength(model, p) * (mine.length - theirs.length);
-    const slope = sigmoid(z0) * (1 - sigmoid(z0)); // turns logit changes into win-chance changes
+      k *
+      (logit(w, matchRow({ picks_a: mine, picks_b: theirs, patch: p }, ctx, model.tags, false), DRAFT_GROUPS) -
+        meanStrength(model, p) * (mine.length - theirs.length));
+    const slope = k * sigmoid(z0) * (1 - sigmoid(z0)); // turns logit changes into win-chance changes
     const parts = [];
-    let strength = 0;
+    let strength = 0, notes = 0, perf = 0;
     for (const [k, v] of delta) {
       const value = (w[k] || 0) * v;
       if (!value) continue;
       const g = groupOf(k);
       if (g === "champ" || g === "step") strength += value;
-      else if (g === "notes") parts.push({ kind: "notes", value: value * slope });
+      else if (g === "notes") notes += value;
+      else if (g === "perf") perf += value;
       else if (g === "pair") parts.push({ kind: "ally", with: other(k.slice(5).split("+"), c), value: value * slope });
       else if (g === "vs") parts.push({ kind: "enemy", with: other(k.slice(3).split(">"), c), value: value * slope });
       else if (g === "comp") {
@@ -363,6 +635,8 @@ const Train = (() => {
         parts.push({ kind: "comp", what: k.slice(5), value: value * slope, change: !now ? "fixes" : !was ? "causes" : "keeps" });
       }
     }
+    if (notes) parts.unshift({ kind: "notes", value: notes * slope });
+    if (perf) parts.unshift({ kind: "perf", value: perf * slope });
     parts.unshift({ kind: "base", value: (strength - meanStrength(model, p)) * slope });
     const total = parts.reduce((t, x) => t + x.value, 0);
     return { champion: c, score: total, parts };
@@ -424,8 +698,8 @@ const Train = (() => {
   }
 
   return {
-    train, winChance, pickValue, suggest, compFeatures, matchRow, patchContext, teamFeatures,
-    PENALTY, DRAFT_GROUPS,
+    train, winChance, pickValue, suggest, compFeatures, matchRow, patchContext, teamFeatures, fightShares, perfTable,
+    calibration, PENALTY, DRAFT_GROUPS, CONTEXT_GROUPS,
   };
 })();
 

@@ -237,6 +237,7 @@ kbd {
 select:disabled { opacity: 0.5; }
 
 /* Trained draft model */
+.check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; white-space: nowrap; }
 .train-report { background: var(--panel-2); border-radius: 8px; padding: 8px 10px; margin: 0 0 12px; }
 .sg-reasons { margin: 4px 0 0; padding-left: 16px; color: var(--muted); }
 .sg-reasons li { margin: 1px 0; }

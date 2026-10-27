@@ -65,6 +65,32 @@ def test_extract_matches_links_bans_and_positions():
     assert matches[1].bans_a == []  # no detail record for this one
 
 
+def player_block(player_id, slot, champ, skills, fight):
+    dealt, taken, healing, gold = fight
+    return (
+        u64(2) + u64(player_id) + u64(0) + u64(slot) + u64(1)
+        + b"".join(u64(x) for x in skills) + u64(40) * 11 + u64(1) + u64(5) + u64(100)
+        + s(champ) + u64(4) * 12 + s(champ) + u64(1) + s(champ)
+        + u64(0) + u64(1) + u64(1) + u64(70) + u64(dealt) + u64(taken) + u64(healing) + u64(gold)
+    )
+
+
+def test_player_skills_and_fight_stats_are_read():
+    positions = PICKS_A + PICKS_B
+    players = b"".join(
+        player_block(500 + i, i % 5, c, [60 + i] * 8, (1000 * i, 2000, 30 * i, 5000 + i)) for i, c in enumerate(positions)
+    )
+    body = (
+        summary(0, 60, 62, PICKS_A, PICKS_B, 1)
+        + summary(1, 3, 9, FILLER_CHAMPS[:5], [FILLER_CHAMPS[5], "monk", "gunner", "soldier", "lancer"], 1)
+        + u64(7) + u64(60) + u64(62) + str_list(BANS_A) + str_list(BANS_B) + b"\x01" + players + u64(0) * 8
+    )
+    m = extract_matches(body)[0]
+    assert m.bans_a == BANS_A
+    assert [p["id"] for p in m.players_a] == [500, 501, 502, 503, 504]
+    assert m.players_b[2] == {"id": 507, "skills": [67] * 8, "dealt": 7000, "taken": 2000, "healing": 210, "gold": 5007}
+
+
 def test_detail_with_other_teams_is_not_linked():
     body = summary(0, 60, 62, PICKS_A, PICKS_B, 0) + detail(3, 9, BANS_A, BANS_B, PICKS_A + PICKS_B)
     assert extract_matches(body)[0].bans_a == []

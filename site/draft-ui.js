@@ -118,11 +118,32 @@ async function loadTrainedModel() {
   render();
 }
 
-function trainModel() {
+// The other saves in the data folder, for the "use other saves" test.
+async function otherSaves() {
+  const res = await fetch("../data/index.json", { cache: "no-store" });
+  const saves = (await res.json()).filter((x) => x.file !== state.dataset.save.file);
+  const out = [];
+  for (const save of saves) {
+    const r = await fetch(`../data/${encodeURIComponent(save.json)}`, { cache: "no-store" });
+    if (r.ok) out.push(await r.json());
+  }
+  return out;
+}
+
+async function trainModel() {
   if (state.training || !state.dataset || !state.tags) return;
   state.training = true;
   $("train").disabled = true;
   $("train").textContent = "Training… 0%";
+  let extra = [];
+  if ($("train-extra").checked) {
+    $("train").textContent = "Loading other saves…";
+    try {
+      extra = await otherSaves();
+    } catch {
+      extra = [];
+    }
+  }
   const worker = new Worker("train-worker.js");
   worker.onmessage = async (e) => {
     const { progress, model, error } = e.data;
@@ -146,16 +167,40 @@ function trainModel() {
     } catch {
       saved = false;
     }
-    const r = model.report;
-    showReport(
-      `Trained on ${model.games.toLocaleString()} games. Tested on the newest ${r.testGames.toLocaleString()} games ` +
-        `(model trained only on the games before them): the trained model picked the winner ` +
-        `${pct(r.draftOnly.accuracy)} of the time from the draft alone, the basic helper ${pct(r.baseline)}.` +
-        (saved ? "" : " Couldn't save the model, so it only lasts until you reload the page."),
-    );
+    showReport(reportText(model, extra.length) + (saved ? "" : " Couldn't save the model, so it only lasts until you reload the page."));
     render();
   };
-  worker.postMessage({ dataset: state.dataset, tags: state.tags });
+  worker.postMessage({ dataset: state.dataset, tags: state.tags, extra });
+}
+
+function reportText(model, extraSaves) {
+  const r = model.report;
+  const cal = r.draftOnly.calibration.bins.filter((b) => b.games >= 30);
+  const text = [
+    `Trained on ${model.games.toLocaleString()} games. Tested on the newest ${r.testGames.toLocaleString()} games ` +
+      `(model trained only on the games before them): the trained model picked the winner ` +
+      `${pct(r.draftOnly.accuracy)} of the time from the draft alone, the basic helper ${pct(r.baseline)}. ` +
+      `Knowing the teams and players too, it got ${pct(r.withContext.accuracy)}.`,
+  ];
+  if (cal.length) {
+    text.push(
+      "Win chances vs what happened: " +
+        cal.map((b) => `said ${Math.round(b.predicted * 100)}%, won ${Math.round(b.actual * 100)}%`).join(" · ") + ".",
+    );
+  }
+  if (r.extra) {
+    const w = r.extra.without;
+    text.push(
+      `Test with other saves: ${r.extra.games.toLocaleString()} games from ${r.extra.saves} other saves gave ` +
+        `${pct(r.draftOnly.accuracy)} from the draft (log loss ${r.draftOnly.logLoss.toFixed(3)}), ` +
+        `vs ${pct(w.draftOnly.accuracy)} (${w.draftOnly.logLoss.toFixed(3)}) without them. Lower log loss is better.`,
+    );
+  } else if (extraSaves) {
+    text.push("Test with other saves: they had no games that aren't already in this save.");
+  } else if ($("train-extra").checked) {
+    text.push("Test with other saves: there are no other saves in the data folder.");
+  }
+  return text.join(" ");
 }
 
 function showReport(text) {
@@ -277,7 +322,8 @@ function renderModelInfo() {
   const newGames = state.dataset.matches.filter((x) => x.id > m.lastMatchId).length;
   $("model-info").textContent =
     `Trained model · ${m.games.toLocaleString()} games · tested ${pct(m.report.draftOnly.accuracy)}` +
-    (newGames && lastId > m.lastMatchId ? ` · ${newGames} new games since, train again to include them` : "");
+    (newGames && lastId > m.lastMatchId ? ` · ${newGames} new games since, train again to include them` : "") +
+    ((m.version || 1) < 2 ? " · trained before the latest update, train again for player and fight stats" : "");
 }
 
 function renderOpponent() {
@@ -397,6 +443,7 @@ function reasonList(r, side, kind) {
       const v = `<b class="${p.value >= 0 ? "good" : "bad"}">${signedPct(p.value)}</b>`;
       if (p.kind === "base") return `${v} strength on this patch`;
       if (p.kind === "notes") return `${v} from patch notes (${p.value >= 0 ? "buffed" : "nerfed"})`;
+      if (p.kind === "perf") return `${v} from fight stats (gold and damage share) in recent games`;
       if (p.kind === "ally") return `${v} with ${escapeHtml(champName(p.with))}`;
       if (p.kind === "enemy") return `${v} vs ${escapeHtml(champName(p.with))}`;
       if (p.kind === "habit") {

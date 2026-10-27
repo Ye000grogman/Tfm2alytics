@@ -83,6 +83,7 @@ Stats site running at http://127.0.0.1:8642/site/ (Ctrl+C to stop)
 - **Draft** tab: choose the patch (default: newest), who picks first and, if you like, your opponent, then follow the in-game draft.
   The highlighted slot is the next turn. Click a suggestion or any champion to fill it, and click any slot to change it.
   Press **Train model** once to train the draft model on your save (a few seconds). Press it again after new games.
+  Tick **Use other saves (test)** first to also learn from your other saves and see if it helps.
 
 ### Updating the stats after a game
 
