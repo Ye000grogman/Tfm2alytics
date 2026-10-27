@@ -34,7 +34,7 @@
  "ice_mage": {"damage": "magic", "range": "ranged", "tags": ["cc"]},
  "illusionist": {"damage": "magic", "range": "ranged", "tags": ["cc"]},
  "inquisitor": {"damage": "physical", "range": "melee", "tags": ["light_cc"]},
- "jiangshi": {"damage": "physical", "range": "melee", "tags": ["frontline", "cc"]},
+ "jiangshi": {"damage": "physical", "range": "melee", "tags": ["cc", "frontline", "self_heal"]},
  "knight": {"damage": "physical", "range": "melee", "tags": ["frontline", "cc", "shield"]},
  "lancer": {"damage": "physical", "range": "melee", "tags": ["cc"]},
  "lightning_mage": {"damage": "magic", "range": "ranged", "tags": []},

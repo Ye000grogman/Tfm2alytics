@@ -32,7 +32,7 @@ const Train = (() => {
   function compFeatures(team, enemies, tags) {
     if (!team.length) return [];
     const count = (list) => {
-      const n = { magic: 0, physical: 0, cc: 0, front: 0, sustain: 0, ranged: 0, antiHeal: 0, shred: 0, buffer: 0, cdr: 0, antiProjectile: 0, ccImmunity: 0 };
+      const n = { magic: 0, physical: 0, cc: 0, front: 0, sustain: 0, ranged: 0, antiHeal: 0, shred: 0, buffer: 0, cdr: 0, antiProjectile: 0, ccImmunity: 0, healing: 0 };
       for (const c of list) {
         const t = tags[c];
         if (!t) continue;
@@ -44,6 +44,9 @@ const Train = (() => {
         else if (t.tags.includes("light_cc")) n.cc += 0.5;
         if (t.tags.includes("frontline")) n.front++;
         if (t.tags.includes("healing") || t.tags.includes("shield")) n.sustain++;
+        // Healing the enemy's anti-heal can cut: team healing counts fully, self-healing half.
+        if (t.tags.includes("healing")) n.healing++;
+        else if (t.tags.includes("self_heal")) n.healing += 0.5;
         if (t.tags.includes("anti_heal")) n.antiHeal++;
         if (t.tags.includes("shred")) n.shred++;
         if (t.tags.includes("buffer")) n.buffer++;
@@ -69,7 +72,7 @@ const Train = (() => {
     on("no_sustain", sustain === 0);
     on("few_ranged", ranged <= 1);
     on("mostly_ranged", ranged >= 4);
-    on("no_anti_heal_vs_sustain", antiHeal === 0 && foe.sustain >= 2);
+    on("no_anti_heal_vs_sustain", antiHeal === 0 && foe.healing >= 2);
     on("no_shred_vs_frontline", shred === 0 && foe.front >= 2);
     on("buffer_with_cdr", buffer > 0 && cdr > 0);
     on("anti_projectile_vs_ranged", antiProjectile > 0 && foe.ranged >= 3);
