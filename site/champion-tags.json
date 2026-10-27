@@ -9,7 +9,7 @@
  "bomber": {"damage": "physical", "range": "ranged", "tags": ["cc"]},
  "boomerang_hunter": {"damage": "physical", "range": "ranged", "tags": []},
  "cavalry_knight": {"damage": "physical", "range": "melee", "tags": ["cc", "mobility"]},
- "chef": {"damage": "mixed", "range": "melee", "tags": ["frontline", "healing"]},
+ "chef": {"damage": "mixed", "range": "melee", "tags": ["frontline", "healing", "light_cc"]},
  "circus_blade": {"damage": "physical", "range": "melee", "tags": ["cc"]},
  "clown": {"damage": "physical", "range": "melee", "tags": []},
  "crossbowman": {"damage": "physical", "range": "ranged", "tags": []},
