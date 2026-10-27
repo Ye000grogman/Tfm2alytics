@@ -78,6 +78,8 @@ Stats site running at http://127.0.0.1:8642/site/ (Ctrl+C to stop)
 
 - **Stats** tab: pick a save (default: *Latest save*), a patch, and which matches to count: the whole league, your team's games,
   your team's picks, or your opponents' picks against you. Click a champion for its synergies, counters and win rate by patch.
+- **Patches** tab: the game's patch notes, with how each changed champion did before and after the patch.
+  Type a champion's name to see every patch that changed it.
 - **Draft** tab: choose the patch to take stats from (default: newest) and who picks first, then follow the in-game draft.
   The highlighted slot is the next turn. Click a suggestion or any champion to fill it, and click any slot to change it.
 

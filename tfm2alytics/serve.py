@@ -12,20 +12,27 @@ import argparse
 import functools
 import http.server
 import json
+import re
 import sys
 import threading
 import time
 import webbrowser
 from pathlib import Path
 
-from .extract import default_save_dir, extract_save, write_index
+from .extract import FORMAT_VERSION, default_save_dir, extract_save, write_index
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 def needs_extract(save: Path, out: Path) -> bool:
     json_path = out / f"{save.stem}.json"
-    return not json_path.exists() or json_path.stat().st_mtime < save.stat().st_mtime
+    if not json_path.exists() or json_path.stat().st_mtime < save.stat().st_mtime:
+        return True
+    # Re-extract data written by an older version of the extractor. The JSON
+    # starts with {"format_version":N, so the first bytes are enough.
+    with json_path.open("rb") as f:
+        m = re.match(rb'\{"format_version":(\d+)', f.read(64))
+    return not m or int(m.group(1)) < FORMAT_VERSION
 
 
 def wait_until_written(save: Path, timeout: float = 30) -> None:
