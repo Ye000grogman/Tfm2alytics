@@ -43,7 +43,7 @@ const Train = (() => {
         else if (t.tags.includes("cc")) n.cc++;
         else if (t.tags.includes("light_cc")) n.cc += 0.5;
         if (t.tags.includes("frontline")) n.front++;
-        if (t.tags.includes("healing") || t.tags.includes("shield")) n.sustain++;
+        if (["healing", "shield", "death_prevention"].some((x) => t.tags.includes(x))) n.sustain++;
         // Healing the enemy's anti-heal can cut: team healing counts fully, self-healing half.
         if (t.tags.includes("healing")) n.healing++;
         else if (t.tags.includes("self_heal")) n.healing += 0.5;
