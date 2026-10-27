@@ -46,7 +46,7 @@
  "ogre": {"damage": "physical", "range": "melee", "tags": ["cc", "frontline", "stacking"]},
  "plague_doctor": {"damage": "physical", "range": "ranged", "tags": ["buffer", "death_prevention"]},
  "poison_dart_hunter": {"damage": "physical", "range": "ranged", "tags": ["buffer", "light_cc"]},
- "pole_warrior": {"damage": "physical", "range": "melee", "tags": ["frontline"]},
+ "pole_warrior": {"damage": "physical", "range": "melee", "tags": ["cc", "frontline"]},
  "priest": {"damage": "magic", "range": "ranged", "tags": ["healing"]},
  "prisoner": {"damage": "physical", "range": "melee", "tags": ["frontline", "cc"]},
  "pyromancer": {"damage": "magic", "range": "ranged", "tags": []},
