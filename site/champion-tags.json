@@ -23,7 +23,7 @@
  "executioner": {"damage": "physical", "range": "melee", "tags": ["anti_heal", "cc"]},
  "exorcist": {"damage": "physical", "range": "melee", "tags": ["buffer", "cc_immunity", "frontline"]},
  "fighter": {"damage": "physical", "range": "melee", "tags": ["cc"]},
- "gambler": {"damage": "physical", "range": "ranged", "tags": []},
+ "gambler": {"damage": "physical", "range": "ranged", "tags": ["cc"]},
  "ghost": {"damage": "physical", "range": "melee", "tags": []},
  "guardian_spirit": {"damage": "magic", "range": "ranged", "tags": ["healing"]},
  "gunner": {"damage": "physical", "range": "ranged", "tags": []},
