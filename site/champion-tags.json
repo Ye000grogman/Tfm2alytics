@@ -14,7 +14,7 @@
  "clown": {"damage": "physical", "range": "melee", "tags": []},
  "crossbowman": {"damage": "physical", "range": "ranged", "tags": []},
  "dancer": {"damage": "physical", "range": "melee", "tags": []},
- "dark_mage": {"damage": "magic", "range": "ranged", "tags": []},
+ "dark_mage": {"damage": "magic", "range": "ranged", "tags": ["cc"]},
  "demon": {"damage": "physical", "range": "melee", "tags": []},
  "dokkaebi": {"damage": "physical", "range": "melee", "tags": ["shield"]},
  "druid": {"damage": "mixed", "range": "ranged", "tags": ["frontline"]},
