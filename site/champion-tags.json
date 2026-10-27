@@ -26,7 +26,7 @@
  "gambler": {"damage": "physical", "range": "ranged", "tags": ["cc"]},
  "ghost": {"damage": "physical", "range": "melee", "tags": ["self_cc_immunity", "stacking"]},
  "guardian_spirit": {"damage": "magic", "range": "ranged", "tags": ["buffer", "healing", "revive", "shield"]},
- "gunner": {"damage": "physical", "range": "ranged", "tags": []},
+ "gunner": {"damage": "physical", "range": "ranged", "tags": ["light_cc"]},
  "hammerer": {"damage": "physical", "range": "melee", "tags": ["frontline", "cc"]},
  "harpooner": {"damage": "physical", "range": "ranged", "tags": ["cc"]},
  "hitman": {"damage": "physical", "range": "ranged", "tags": []},
