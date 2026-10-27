@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tfm2alytics · Patches</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Tfm2alytics</div>
+    <nav class="nav"><a href="index.html">Stats</a><a href="draft.html">Draft</a><a href="patches.html" class="active">Patches</a></nav>
+    <label class="field">
+      <span>Save</span>
+      <select id="save-select"></select>
+    </label>
+    <button id="refresh" class="button" title="Check for new saves (R)">Check for new saves <kbd>R</kbd></button>
+    <div class="save-info"><div id="save-title"></div><div id="save-info" class="small"></div></div>
+  </header>
+
+  <section class="filters">
+    <label class="field">
+      <span>Patch</span>
+      <select id="patch-select"></select>
+    </label>
+    <label class="field">
+      <span>Show</span>
+      <select id="kind-select">
+        <option value="all">All changes</option>
+        <option value="buff">Buffs</option>
+        <option value="nerf">Nerfs</option>
+      </select>
+    </label>
+    <label class="field grow">
+      <span>Champion</span>
+      <input id="search" type="search" placeholder="Every patch that changed a champion">
+    </label>
+  </section>
+
+  <main id="patches" class="patches"></main>
+
+  <footer class="footnote">
+    Changes and reasons come from the game's own patch notes in your save. Stats are for the whole league:
+    "before" is the patch before, "after" is the patch itself. A patch with few games yet has noisy numbers,
+    so check the game counts.
+  </footer>
+
+  <script src="stats.js"></script>
+  <script src="patch-notes.js"></script>
+  <script src="live.js"></script>
+  <script src="patches-ui.js"></script>
+</body>
+</html>

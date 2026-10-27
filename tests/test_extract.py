@@ -99,6 +99,7 @@ def test_read_save_roundtrip(tmp_path):
 def test_needs_extract_tracks_newer_saves(tmp_path):
     import os
 
+    from tfm2alytics.extract import FORMAT_VERSION
     from tfm2alytics.serve import needs_extract
 
     save = tmp_path / "save_1.data"
@@ -106,11 +107,23 @@ def test_needs_extract_tracks_newer_saves(tmp_path):
     out = tmp_path / "data"
     out.mkdir()
     assert needs_extract(save, out)
-    (out / "save_1.json").write_text("{}")
+    (out / "save_1.json").write_text(f'{{"format_version":{FORMAT_VERSION}}}')
     os.utime(save, (1_000, 1_000))
     assert not needs_extract(save, out)
     os.utime(save, (4_000_000_000, 4_000_000_000))  # the game wrote the save again
     assert needs_extract(save, out)
+
+
+def test_needs_extract_redoes_older_formats(tmp_path):
+    import os
+
+    from tfm2alytics.serve import needs_extract
+
+    save = tmp_path / "save_1.data"
+    save.write_bytes(b"x")
+    os.utime(save, (1_000, 1_000))
+    (tmp_path / "save_1.json").write_text('{"format_version":1}')
+    assert needs_extract(save, tmp_path)
 
 
 def test_refresh_only_extracts_changed_saves(tmp_path, monkeypatch):

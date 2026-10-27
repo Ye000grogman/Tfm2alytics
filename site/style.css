@@ -210,3 +210,28 @@ kbd {
 @media (max-width: 1000px) {
   .draft-layout { grid-template-columns: 1fr; }
 }
+
+/* Patch notes */
+.patches { padding: 16px 20px; display: flex; flex-direction: column; gap: 24px; }
+.patch-head h2 { margin: 0 0 4px; font-size: 18px; }
+.patch-head h2 .muted { font-weight: 400; font-size: 14px; margin-left: 6px; }
+.new-champs { margin: 10px 0 0; }
+.patch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 12px; }
+.patch-card { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--muted); border-radius: 10px; padding: 12px 14px; }
+.patch-card.buff { border-left-color: var(--good); }
+.patch-card.nerf { border-left-color: var(--bad); }
+.patch-card.mixed { border-left-color: var(--tier-s); }
+.patch-card.rules { margin-top: 12px; max-width: 520px; }
+.patch-card h3 { margin: 0 0 6px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.patch-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 15px; }
+.reasons { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; background: var(--panel-2); color: var(--muted); }
+.pill.buff { background: rgba(62, 207, 142, 0.15); color: var(--good); }
+.pill.nerf { background: rgba(255, 107, 107, 0.15); color: var(--bad); }
+.pill.mixed { background: rgba(255, 159, 67, 0.15); color: var(--tier-s); }
+.pill.new { background: rgba(79, 163, 255, 0.15); color: var(--accent); }
+.pill .level { letter-spacing: -1px; font-size: 9px; }
+.changes { margin: 0 0 8px; padding-left: 18px; font-size: 13px; }
+.changes li { margin: 2px 0; }
+.patch-stats { border-top: 1px solid var(--line); margin-top: 4px; }
+select:disabled { opacity: 0.5; }

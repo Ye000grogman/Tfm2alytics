@@ -15,9 +15,10 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .matches import extract_matches, find_team_names
+from .patches import find_patch_notes
 from .save_file import read_save
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2  # 2: adds patch_notes
 
 
 def default_save_dir() -> Path | None:
@@ -48,6 +49,7 @@ def build_dataset(save_path: Path) -> dict:
         "champions": champions,
         "teams": {str(t): teams.get(t, f"Team {t}") for t in sorted(team_ids)},
         "matches": [{**asdict(mt), "winner": mt.winner} for mt in matches],
+        "patch_notes": find_patch_notes(save.body),
         "summary": {
             "matches": len(matches),
             "with_bans": sum(1 for mt in matches if mt.bans_a),
