@@ -62,7 +62,7 @@
  "swordman": {"damage": "physical", "range": "melee", "tags": []},
  "taoist": {"damage": "magic", "range": "ranged", "tags": ["cc", "debuffer", "shred", "silence"]},
  "vampire": {"damage": "mixed", "range": "melee", "tags": ["healing", "scaling"]},
- "voodoo_shaman": {"damage": "magic", "range": "ranged", "tags": ["cc"]},
+ "voodoo_shaman": {"damage": "magic", "range": "ranged", "tags": ["cc", "debuffer", "silence"]},
  "werewolf": {"damage": "physical", "range": "melee", "tags": []},
  "whip_master": {"damage": "physical", "range": "melee", "tags": []},
  "white_mage": {"damage": "magic", "range": "ranged", "tags": ["cc"]},
