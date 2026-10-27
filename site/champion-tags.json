@@ -19,7 +19,7 @@
  "dokkaebi": {"damage": "physical", "range": "melee", "tags": ["shield"]},
  "druid": {"damage": "mixed", "range": "ranged", "tags": ["frontline"]},
  "dual_blader": {"damage": "physical", "range": "melee", "tags": ["cc", "strong_cc"]},
- "enchanter": {"damage": "magic", "range": "ranged", "tags": []},
+ "enchanter": {"damage": "magic", "range": "ranged", "tags": ["buffer", "cc_immunity"]},
  "executioner": {"damage": "physical", "range": "melee", "tags": []},
  "exorcist": {"damage": "physical", "range": "melee", "tags": ["frontline"]},
  "fighter": {"damage": "physical", "range": "melee", "tags": ["cc"]},

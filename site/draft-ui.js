@@ -48,6 +48,7 @@ const COMP_TEXT = {
   no_shred_vs_frontline: "no shred vs their frontline",
   buffer_with_cdr: "an ally buffer with cooldown-hungry champions",
   anti_projectile_vs_ranged: "projectile blocking vs their ranged champions",
+  cc_immunity_vs_cc: "CC immunity vs their CC",
 };
 
 function init() {
