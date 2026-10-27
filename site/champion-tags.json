@@ -37,7 +37,7 @@
  "jiangshi": {"damage": "physical", "range": "melee", "tags": ["cc", "frontline", "self_heal"]},
  "knight": {"damage": "physical", "range": "melee", "tags": ["frontline", "cc", "shield"]},
  "lancer": {"damage": "physical", "range": "melee", "tags": ["cc"]},
- "lightning_mage": {"damage": "magic", "range": "ranged", "tags": []},
+ "lightning_mage": {"damage": "magic", "range": "ranged", "tags": ["cc"]},
  "magic_knight": {"damage": "mixed", "range": "melee", "tags": []},
  "monk": {"damage": "magic", "range": "melee", "tags": ["frontline", "healing"]},
  "necromancer": {"damage": "magic", "range": "ranged", "tags": []},
