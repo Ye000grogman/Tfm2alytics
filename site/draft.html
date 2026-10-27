@@ -15,8 +15,12 @@
       <select id="save-select"></select>
     </label>
     <label class="field">
-      <span>Stats from patch</span>
+      <span>Patch</span>
       <select id="patch-select"></select>
+    </label>
+    <label class="field">
+      <span>Opponent</span>
+      <select id="opponent"><option value="">Unknown</option></select>
     </label>
     <label class="field">
       <span>First pick</span>
@@ -27,6 +31,7 @@
     </label>
     <button id="refresh" class="button" title="Check for new saves (R)">Check for new saves <kbd>R</kbd></button>
     <button id="reset" class="button">Reset draft</button>
+    <button id="train" class="button" title="Train the draft model on every game in this save">Train model</button>
     <div class="save-info"><div id="model-info"></div><div id="save-info" class="small"></div></div>
   </header>
 
@@ -42,6 +47,7 @@
         <div class="win-bar"><div id="win-fill"></div></div>
         <div id="win-text" class="small muted"></div>
       </div>
+      <p id="train-report" class="train-report small" hidden></p>
       <h2 id="suggest-title">Suggestions</h2>
       <p id="suggest-hint" class="small muted"></p>
       <ol id="suggestions" class="suggestions"></ol>
@@ -54,19 +60,22 @@
       <h2>Enemy team</h2>
       <div class="slot-group"><h3>Bans</h3><div class="slots" data-side="enemy" data-kind="ban"></div></div>
       <div class="slot-group"><h3>Picks</h3><div class="slots" data-side="enemy" data-kind="pick"></div></div>
+      <div id="opponent-info" class="opponent-info small"></div>
     </section>
   </main>
 
   <footer class="footnote">
-    Draft helper v0. A pick is scored as the champion's win rate on this patch (smoothed)
-    plus its synergy with your picks plus how it does against their picks. A ban is scored as
-    how good that champion would be for the enemy, nudged toward champions that get picked or
-    banned a lot. In a backtest on 10,077 games, the team this model favours won 63% of the time.
-    Click any slot to fill or change it.
+    Press <b>Train model</b> to train the draft model on every game in this save; it's saved for next time.
+    The trained model scores a draft from champion strength on the patch (carried over from earlier patches
+    and the patch notes), synergy, counters and team composition from the champion tags. Your suggestions
+    look one turn ahead: each pick is judged after the enemy's best answer. Pick an opponent to weigh their
+    favourite picks and bans. Without a trained model, the basic helper scores picks from this patch's win
+    rates, synergy and counters. Click any slot to fill or change it.
   </footer>
 
   <script src="stats.js"></script>
   <script src="draft.js"></script>
+  <script src="train.js"></script>
   <script src="live.js"></script>
   <script src="draft-ui.js"></script>
 </body>

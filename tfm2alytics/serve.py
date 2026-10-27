@@ -78,6 +78,22 @@ class Refresher:
             return {"ok": not failed, "checked": len(saves), "updated": updated, "failed": failed}
 
 
+MODEL_NAME = re.compile(r"[\w.-]+")
+MAX_MODEL_BYTES = 20_000_000
+
+
+def save_model(out: Path, save_stem: str, body: bytes) -> Path:
+    """Store a model trained in the browser next to its save's data."""
+    if not MODEL_NAME.fullmatch(save_stem) or save_stem.startswith("."):
+        raise ValueError("bad save name")
+    json.loads(body)  # only store valid JSON
+    path = out / f"{save_stem}.model.json"
+    tmp = path.with_suffix(".tmp")
+    tmp.write_bytes(body)
+    tmp.replace(path)
+    return path
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     data_dir: Path = ROOT / "data"
     refresher: Refresher | None = None
@@ -90,10 +106,26 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return super().translate_path(path)
 
     def do_POST(self):
-        if self.path.split("?")[0] != "/api/refresh":
+        route, _, query = self.path.partition("?")
+        if route == "/api/refresh":
+            self.send_json(self.refresher.run())
+        elif route == "/api/model":
+            length = int(self.headers.get("Content-Length") or 0)
+            if length > MAX_MODEL_BYTES:
+                self.send_error(413)
+                return
+            params = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
+            try:
+                save_model(self.data_dir, params.get("save", ""), self.rfile.read(length))
+            except ValueError as err:
+                self.send_json({"ok": False, "error": str(err)})
+                return
+            self.send_json({"ok": True})
+        else:
             self.send_error(404)
-            return
-        body = json.dumps(self.refresher.run()).encode()
+
+    def send_json(self, data):
+        body = json.dumps(data).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))

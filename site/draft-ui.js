@@ -17,7 +17,10 @@ function draftOrder(firstPick) {
 
 const state = {
   dataset: null,
-  model: null,
+  model: null, // basic helper (v0), always available
+  trained: null, // trained model (Phase 5), once trained or loaded
+  tags: null,
+  training: false,
   draft: { me: { ban: Array(BANS).fill(null), pick: Array(PICKS).fill(null) }, enemy: { ban: Array(BANS).fill(null), pick: Array(PICKS).fill(null) } },
   active: null, // [side, kind, index]
 };
@@ -27,9 +30,34 @@ const champName = (id) => id.split("_").map((w) => w[0].toUpperCase() + w.slice(
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const signedPct = (x) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
 const filled = (list) => list.filter(Boolean);
+const pct = (x) => `${(x * 100).toFixed(1)}%`;
+const saveStem = () => state.dataset.save.file.replace(/\.data$/, "");
+
+const COMP_TEXT = {
+  no_magic: "no magic damage",
+  mostly_magic: "mostly magic damage",
+  no_physical: "no physical damage",
+  no_cc: "no CC",
+  much_cc: "lots of CC",
+  no_frontline: "no frontline",
+  two_frontline: "2+ frontliners",
+  no_sustain: "no healing or shields",
+  few_ranged: "1 or fewer ranged",
+  mostly_ranged: "4+ ranged",
+  no_anti_heal_vs_sustain: "no anti-heal vs their healing",
+  no_shred_vs_frontline: "no shred vs their frontline",
+  buffer_with_cdr: "an ally buffer with cooldown-hungry champions",
+  anti_projectile_vs_ranged: "projectile blocking vs their ranged champions",
+};
 
 function init() {
   $("patch-select").addEventListener("change", rebuildModel);
+  $("opponent").addEventListener("change", render);
+  $("train").addEventListener("click", trainModel);
+  fetch("champion-tags.json")
+    .then((res) => res.json())
+    .then((tags) => (state.tags = tags))
+    .catch(() => ($("train").disabled = true));
   $("first-pick").addEventListener("change", () => {
     state.active = nextEmptySlot();
     render();
@@ -57,15 +85,113 @@ function setDataset(dataset, { refresh = false } = {}) {
     `<option value="all">All patches (${dataset.matches.length} games)</option>`;
   const keep = refresh && [...$("patch-select").options].some((o) => o.value === keepPatch);
   $("patch-select").value = keep ? keepPatch : patches[0];
+  fillOpponents(refresh);
   rebuildModel();
   if (!refresh) resetDraft();
+  loadTrainedModel();
+}
+
+function fillOpponents(refresh) {
+  const keep = $("opponent").value;
+  const mine = String(state.dataset.save.my_team_id);
+  const teams = Object.entries(state.dataset.teams)
+    .filter(([id]) => id !== mine)
+    .sort((a, b) => a[1].localeCompare(b[1]));
+  $("opponent").innerHTML =
+    `<option value="">Unknown</option>` + teams.map(([id, name]) => `<option value="${id}">${escapeHtml(name)}</option>`).join("");
+  if (refresh && teams.some(([id]) => id === keep)) $("opponent").value = keep;
+}
+
+// A model trained earlier for this save is kept next to its data.
+async function loadTrainedModel() {
+  const stem = saveStem();
+  try {
+    const res = await fetch(`../data/${encodeURIComponent(stem)}.model.json`, { cache: "no-store" });
+    if (!res.ok) throw new Error(res.statusText);
+    const model = await res.json();
+    if (saveStem() === stem) state.trained = model;
+  } catch {
+    state.trained = null;
+  }
+  render();
+}
+
+function trainModel() {
+  if (state.training || !state.dataset || !state.tags) return;
+  state.training = true;
+  $("train").disabled = true;
+  $("train").textContent = "Training… 0%";
+  const worker = new Worker("train-worker.js");
+  worker.onmessage = async (e) => {
+    const { progress, model, error } = e.data;
+    if (progress != null) {
+      $("train").textContent = `Training… ${Math.round(progress * 100)}%`;
+      return;
+    }
+    worker.terminate();
+    state.training = false;
+    $("train").disabled = false;
+    $("train").textContent = "Train model";
+    if (error) {
+      showReport(`Training failed: ${error}`);
+      return;
+    }
+    state.trained = model;
+    let saved = true;
+    try {
+      const res = await fetch(`../api/model?save=${encodeURIComponent(saveStem())}`, { method: "POST", body: JSON.stringify(model) });
+      saved = (await res.json()).ok;
+    } catch {
+      saved = false;
+    }
+    const r = model.report;
+    showReport(
+      `Trained on ${model.games.toLocaleString()} games. Tested on the newest ${r.testGames.toLocaleString()} games ` +
+        `(model trained only on the games before them): the trained model picked the winner ` +
+        `${pct(r.draftOnly.accuracy)} of the time from the draft alone, the basic helper ${pct(r.baseline)}.` +
+        (saved ? "" : " Couldn't save the model, so it only lasts until you reload the page."),
+    );
+    render();
+  };
+  worker.postMessage({ dataset: state.dataset, tags: state.tags });
+}
+
+function showReport(text) {
+  $("train-report").hidden = false;
+  $("train-report").textContent = text;
+}
+
+// What the chosen opponent picks and bans, from their games on the chosen patch,
+// or their latest 30 games when they haven't played it yet.
+function tendencies() {
+  const team = Number($("opponent").value);
+  if (!$("opponent").value) return null;
+  const theirs = state.dataset.matches.filter((m) => m.team_a === team || m.team_b === team);
+  const patch = modelPatch();
+  let games = theirs.filter((m) => m.patch === patch);
+  if (games.length < 10) games = theirs.slice(-30);
+  if (!games.length) return null;
+  const picks = {};
+  const bans = {};
+  for (const m of games) {
+    const a = m.team_a === team;
+    for (const c of a ? m.picks_a : m.picks_b) picks[c] = (picks[c] || 0) + 1 / games.length;
+    for (const c of a ? m.bans_a : m.bans_b) bans[c] = (bans[c] || 0) + 1 / games.length;
+  }
+  return { games: games.length, patch: games === theirs ? null : patch, picks, bans };
+}
+
+// The patch the trained model judges on: the chosen one, or the newest for "all".
+function modelPatch() {
+  const p = $("patch-select").value;
+  return p === "all" ? [...new Set(state.dataset.matches.map((m) => m.patch))].sort(Stats.comparePatch).pop() : p;
 }
 
 function rebuildModel() {
   const patch = $("patch-select").value;
   const matches = Stats.filterMatches(state.dataset.matches, { patch });
   state.model = Draft.buildModel(Stats.sidesFor(matches, "all"), state.dataset.champions);
-  $("model-info").textContent = `${matches.length} games in the model`;
+  state.v0Games = matches.length;
   render();
 }
 
@@ -106,6 +232,8 @@ function place(champion) {
 
 function render() {
   if (!state.model) return;
+  renderModelInfo();
+  renderOpponent();
   renderSlots();
   renderWinChance();
   renderSuggestions();
@@ -137,18 +265,48 @@ function renderSlots() {
   );
 }
 
+function renderModelInfo() {
+  const m = state.trained;
+  if (!m) {
+    $("model-info").textContent = `Basic helper · ${state.v0Games} games · press Train model for the trained one`;
+    return;
+  }
+  const lastId = Math.max(...state.dataset.matches.map((x) => x.id));
+  const newGames = state.dataset.matches.filter((x) => x.id > m.lastMatchId).length;
+  $("model-info").textContent =
+    `Trained model · ${m.games.toLocaleString()} games · tested ${pct(m.report.draftOnly.accuracy)}` +
+    (newGames && lastId > m.lastMatchId ? ` · ${newGames} new games since, train again to include them` : "");
+}
+
+function renderOpponent() {
+  const t = tendencies();
+  if (!t) {
+    $("opponent-info").innerHTML = "";
+    return;
+  }
+  const top = (table) =>
+    Object.entries(table)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([c, s]) => `${escapeHtml(champName(c))} ${Math.round(s * 100)}%`)
+      .join(", ") || "–";
+  $("opponent-info").innerHTML =
+    `<h3>Their habits</h3><div class="muted">${t.games} games${t.patch ? ` on ${escapeHtml(t.patch)}` : " (latest)"}</div>` +
+    `<div><b>Picks:</b> ${top(t.picks)}</div><div><b>Bans:</b> ${top(t.bans)}</div>`;
+}
+
 function renderWinChance() {
   const mine = filled(state.draft.me.pick);
   const theirs = filled(state.draft.enemy.pick);
   const box = $("win-chance");
   box.hidden = !mine.length && !theirs.length;
   if (box.hidden) return;
-  const p = Draft.winChance(state.model, mine, theirs);
+  const p = state.trained ? Train.winChance(state.trained, mine, theirs, modelPatch()) : Draft.winChance(state.model, mine, theirs);
   $("win-fill").style.width = `${(p * 100).toFixed(1)}%`;
   $("win-text").textContent =
     `Draft edge: ${(p * 100).toFixed(0)}% for you on these picks` +
     (mine.length < PICKS || theirs.length < PICKS ? " (so far)" : "") +
-    ". This ignores player skill, which matters as much as the draft.";
+    ". This is the draft alone; player skill matters too.";
 }
 
 function renderSuggestions() {
@@ -172,20 +330,89 @@ function renderSuggestions() {
   $("suggest-hint").textContent = hint;
 
   const view = draftView(side);
-  const results = Draft.suggest(state.model, view, kind, 10);
   const name = (c) => champName(c);
-  list.innerHTML = results
-    .map((r) => {
-      const games = state.model.games[state.model.index.get(r.champion)];
-      const why = Draft.reasons(r, name).join(" · ") || "no strong effects";
-      return `<li data-id="${r.champion}" class="${forMe ? "" : "enemy-view"}">
-        <div class="sg-main"><span class="champ">${escapeHtml(name(r.champion))}</span>
-        <span class="sg-score ${r.score >= 0 ? "good" : "bad"}">${signedPct(r.score)}</span></div>
-        <div class="small muted">${escapeHtml(why)} · ${games} games</div>
-      </li>`;
-    })
+  const items = state.trained ? trainedSuggestions(side, kind, view) : basicSuggestions(kind, view);
+  list.innerHTML = items
+    .map(
+      (it) => `<li data-id="${it.champion}" class="${forMe ? "" : "enemy-view"}">
+        <div class="sg-main"><span class="champ">${escapeHtml(name(it.champion))}</span>
+        <span class="sg-score ${it.score >= 0 ? "good" : "bad"}">${signedPct(it.score)}</span></div>
+        ${it.reasons.length ? `<ul class="sg-reasons small">${it.reasons.map((r) => `<li>${r}</li>`).join("")}</ul>` : `<div class="small muted">no strong effects</div>`}
+      </li>`,
+    )
     .join("");
-  list.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => place(li.dataset.id)));
+  list.querySelectorAll(":scope > li").forEach((li) => li.addEventListener("click", () => place(li.dataset.id)));
+}
+
+function basicSuggestions(kind, view) {
+  return Draft.suggest(state.model, view, kind, 10).map((r) => ({
+    champion: r.champion,
+    score: r.score,
+    reasons: [
+      ...Draft.reasons(r, champName).map(escapeHtml),
+      `<span class="muted">${state.model.games[state.model.index.get(r.champion)]} games</span>`,
+    ],
+  }));
+}
+
+// The side after the acting one picks next, so suggestions can look one turn ahead.
+function otherSidePicksNext(side) {
+  const order = draftOrder($("first-pick").value);
+  const at = order.findIndex(([s, k, i]) => s === state.active[0] && k === state.active[1] && i === state.active[2]);
+  const next = order.slice(at + 1).find(([s, k, i]) => !state.draft[s][k][i]);
+  return Boolean(next && next[0] !== side && next[1] === "pick");
+}
+
+function trainedSuggestions(side, kind, view) {
+  const t = tendencies();
+  const enemyIsOpponent = side === "me";
+  const opts = {
+    patch: modelPatch(),
+    champions: state.dataset.champions,
+    enemyPicksNext: kind === "pick" && otherSidePicksNext(side),
+    // Their habits rank their own turns, and tilt my bans toward what they play.
+    habits: !enemyIsOpponent && t ? (kind === "ban" ? t.bans : t.picks) : null,
+    enemyHabits: t ? (enemyIsOpponent ? t.picks : null) : null,
+  };
+  if (!enemyIsOpponent && kind === "ban" && t) {
+    // Predicting their ban: what's best for me, plus what they usually ban.
+    const results = Train.suggest(state.trained, view, "ban", { ...opts, enemyHabits: t.bans, habits: null });
+    return results.map((r) => ({ champion: r.champion, score: r.score, reasons: reasonList(r, side, kind) }));
+  }
+  return Train.suggest(state.trained, view, kind, opts).map((r) => ({
+    champion: r.champion,
+    score: r.score,
+    reasons: reasonList(r, side, kind),
+  }));
+}
+
+// Every reason behind a suggestion, biggest first, in win-chance points.
+function reasonList(r, side, kind) {
+  const out = r.parts
+    .filter((p) => Math.abs(p.value) >= 0.002)
+    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+    .map((p) => {
+      const v = `<b class="${p.value >= 0 ? "good" : "bad"}">${signedPct(p.value)}</b>`;
+      if (p.kind === "base") return `${v} strength on this patch`;
+      if (p.kind === "notes") return `${v} from patch notes (${p.value >= 0 ? "buffed" : "nerfed"})`;
+      if (p.kind === "ally") return `${v} with ${escapeHtml(champName(p.with))}`;
+      if (p.kind === "enemy") return `${v} vs ${escapeHtml(champName(p.with))}`;
+      if (p.kind === "habit") {
+        const verb = kind === "ban" && side === "enemy" ? "ban" : "pick";
+        return `${v} they ${verb} it in ${Math.round(p.share * 100)}% of games`;
+      }
+      if (p.kind === "comp") {
+        const what = COMP_TEXT[p.what] || p.what.replace(/_/g, " ");
+        const team = kind === "ban" ? "their team" : "the team";
+        const now = { fixes: "no longer has", causes: "now has", keeps: "still has" }[p.change];
+        return `${v} ${team} ${now} ${what}`;
+      }
+      return `${v} ${escapeHtml(p.kind)}`;
+    });
+  if (r.answer) {
+    out.push(`<span class="muted">Their best answer: ${escapeHtml(champName(r.answer.champion))}, leaving you ${pct(r.answer.chance)} to win</span>`);
+  }
+  return out;
 }
 
 function renderGrid() {

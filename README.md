@@ -2,7 +2,7 @@
 
 A personal, offline, lolalytics-style stats site and draft helper for **Teamfight Manager 2**, built from your own save files.
 
-Status: **Phase 4 (draft helper v0) plus patch notes**. A trained draft model (Phase 5) is on hold. See the project docs for the full plan.
+Status: **Phase 5 (trained draft model)**. See the project docs for the full plan.
 
 ## Quick start
 
@@ -40,8 +40,37 @@ Open the **Patches** tab. The game stores its own patch notes in the save, and t
 
 ## The draft helper
 
-Open the **Draft** tab. Pick the patch to take stats from (the newest patch is the default), choose who picks first, and fill the
-board as the in-game draft goes. Click a suggestion or any champion to put it in the highlighted slot. Click any slot to change it.
+Open the **Draft** tab. Pick the patch (the newest is the default), choose who picks first, optionally pick your **opponent**, and
+fill the board as the in-game draft goes. Click a suggestion or any champion to put it in the highlighted slot. Click any slot to change it.
+
+### Trained model
+
+Press **Train model** on the Draft tab. It trains on every game in the save in a few seconds and is saved as
+`data/<save>.model.json`, so it's there next time. Press it again after new games to include them; the header says when there are new ones.
+Without a trained model, the basic helper below is used.
+
+The model is a logistic regression (`site/train.js`). Each game is described by its features, counted for team A and against team B:
+
+- **Champion strength**, with a step per patch. Steps carry over to later patches, so a fresh patch starts from the last one.
+- **Patch notes**: +1 per buff and -1 per nerf a champion got, summed up to the patch.
+- **Synergy** for every pair on a team and **counters** for every pair across teams.
+- **Team composition** from `site/champion-tags.json`: no magic or physical damage, no CC or lots of it, frontline, healing and shields,
+  range, anti-heal vs healing, shred vs frontline, projectile blocking vs ranged, buffers with cooldown-hungry champions.
+- **Team strength** per year, during training only, so strong teams don't make their champions look better than they are.
+  Suggestions never use it.
+
+Each group has its own penalty that pulls weights with little data toward zero. Training holds back the newest 15% of games, trains on
+the rest and reports how often it picks the winner from the draft alone, next to the basic helper. Then it trains again on everything.
+`node tools/train.js data/<save>.json` does the same from the command line.
+
+Suggestions list every reason in win-chance points (strength, patch notes, each ally and enemy, composition, the opponent's habits).
+Your picks look one turn ahead when the enemy picks next: each candidate is judged after the enemy's best answer, which is shown.
+With an opponent chosen, their usual picks rank higher on their turns and their usual bans when predicting their bans, and your bans lean
+toward what they like to play.
+
+The champion tags are hand-checked. Edit `site/champion-tags.json` to fix one, then train again.
+
+### Basic helper
 
 - **Your pick:** champions ranked by win rate on this patch, plus synergy with your picks, plus how they do against the enemy's picks. Each suggestion lists its biggest reasons.
 - **Your ban:** champions that would be best for the enemy given their picks, nudged toward the ones that get picked or banned a lot.

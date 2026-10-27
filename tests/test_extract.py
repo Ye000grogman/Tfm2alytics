@@ -152,3 +152,23 @@ def test_refresh_without_save_folder_reports_it(tmp_path):
 
     result = serve.Refresher(None, tmp_path).run()
     assert not result["ok"] and "Save folder" in result["error"]
+
+
+def test_models_are_saved_next_to_the_data_and_left_out_of_the_index(tmp_path):
+    import json
+
+    import pytest
+
+    from tfm2alytics.extract import write_index
+    from tfm2alytics.serve import save_model
+
+    (tmp_path / "save_1.json").write_text(json.dumps({"save": {"file": "save_1.data", "saved_at": 1}, "summary": {}}))
+    path = save_model(tmp_path, "save_1", b'{"weights": {}}')
+    assert path.name == "save_1.model.json"
+    write_index(tmp_path)
+    assert [s["json"] for s in json.loads((tmp_path / "index.json").read_text())] == ["save_1.json"]
+
+    with pytest.raises(ValueError):
+        save_model(tmp_path, "../evil", b"{}")
+    with pytest.raises(ValueError):
+        save_model(tmp_path, "save_1", b"not json")
