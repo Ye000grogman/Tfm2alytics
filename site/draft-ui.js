@@ -45,7 +45,7 @@ const COMP_TEXT = {
   few_ranged: "1 or fewer ranged",
   mostly_ranged: "4+ ranged",
   no_anti_heal_vs_sustain: "no anti-heal vs their healing",
-  no_shred_vs_frontline: "no shred vs their frontline",
+  no_shred_vs_frontline: "no shred or %HP damage vs their frontline",
   buffer_with_cdr: "an ally buffer with cooldown-hungry champions",
   anti_projectile_vs_ranged: "projectile blocking vs their ranged champions",
   cc_immunity_vs_cc: "CC immunity vs their CC",

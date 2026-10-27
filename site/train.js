@@ -48,7 +48,7 @@ const Train = (() => {
         if (t.tags.includes("healing")) n.healing++;
         else if (t.tags.includes("self_heal")) n.healing += 0.5;
         if (t.tags.includes("anti_heal")) n.antiHeal++;
-        if (t.tags.includes("shred")) n.shred++;
+        if (t.tags.includes("shred") || t.tags.includes("percent_hp")) n.shred++;
         if (t.tags.includes("buffer")) n.buffer++;
         if (t.tags.includes("cdr")) n.cdr++;
         if (t.tags.includes("anti_projectile")) n.antiProjectile++;

@@ -64,7 +64,7 @@
  "vampire": {"damage": "mixed", "range": "melee", "tags": ["healing", "scaling"]},
  "voodoo_shaman": {"damage": "magic", "range": "ranged", "tags": ["cc", "debuffer", "silence"]},
  "werewolf": {"damage": "physical", "range": "melee", "tags": ["light_cc", "self_heal"]},
- "whip_master": {"damage": "physical", "range": "melee", "tags": []},
+ "whip_master": {"damage": "physical", "range": "melee", "tags": ["percent_hp"]},
  "white_mage": {"damage": "magic", "range": "ranged", "tags": ["cc"]},
  "wind_mage": {"damage": "magic", "range": "ranged", "tags": ["cc"]}
 }
