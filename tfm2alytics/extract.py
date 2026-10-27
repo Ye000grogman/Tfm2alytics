@@ -104,7 +104,7 @@ def write_index(out: Path) -> None:
     """List every extracted save so the website can offer them in its picker."""
     saves = []
     for path in sorted(out.glob("*.json")):
-        if path.name == "index.json":
+        if path.name == "index.json" or path.name.endswith(".model.json"):
             continue
         with path.open() as f:
             dataset = json.load(f)

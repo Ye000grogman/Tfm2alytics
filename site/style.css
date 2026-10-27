@@ -186,9 +186,9 @@ kbd {
 #win-fill { height: 100%; background: var(--accent); transition: width 0.2s; }
 
 .suggestions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.suggestions li { background: var(--panel-2); border: 1px solid transparent; border-radius: 8px; padding: 8px 10px; cursor: pointer; }
-.suggestions li:hover { border-color: var(--accent); }
-.suggestions li.enemy-view:hover { border-color: var(--bad); }
+.suggestions > li { background: var(--panel-2); border: 1px solid transparent; border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+.suggestions > li:hover { border-color: var(--accent); }
+.suggestions > li.enemy-view:hover { border-color: var(--bad); }
 .sg-main { display: flex; justify-content: space-between; gap: 8px; }
 .sg-score { font-weight: 700; }
 
@@ -235,3 +235,10 @@ kbd {
 .changes li { margin: 2px 0; }
 .patch-stats { border-top: 1px solid var(--line); margin-top: 4px; }
 select:disabled { opacity: 0.5; }
+
+/* Trained draft model */
+.train-report { background: var(--panel-2); border-radius: 8px; padding: 8px 10px; margin: 0 0 12px; }
+.sg-reasons { margin: 4px 0 0; padding-left: 16px; color: var(--muted); }
+.sg-reasons li { margin: 1px 0; }
+.opponent-info { margin-top: 12px; display: flex; flex-direction: column; gap: 4px; }
+.opponent-info h3 { margin: 0; }
