@@ -57,7 +57,7 @@
  "siege_breaker": {"damage": "physical", "range": "melee", "tags": []},
  "soldier": {"damage": "physical", "range": "melee", "tags": []},
  "spellbreaker": {"damage": "magic", "range": "melee", "tags": ["anti_shield"]},
- "spirit_caller": {"damage": "magic", "range": "ranged", "tags": []},
+ "spirit_caller": {"damage": "magic", "range": "ranged", "tags": ["buffer", "healing", "light_cc", "shield", "shred"]},
  "strongman": {"damage": "physical", "range": "melee", "tags": ["frontline", "cc"]},
  "swordman": {"damage": "physical", "range": "melee", "tags": []},
  "taoist": {"damage": "magic", "range": "ranged", "tags": []},
