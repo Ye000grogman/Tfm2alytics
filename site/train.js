@@ -39,7 +39,8 @@ const Train = (() => {
         if (t.damage === "magic") n.magic++;
         else if (t.damage === "mixed") { n.magic += 0.5; n.physical += 0.5; }
         else n.physical++;
-        if (t.tags.includes("cc")) n.cc++;
+        if (t.tags.includes("strong_cc")) n.cc += 1.5;
+        else if (t.tags.includes("cc")) n.cc++;
         else if (t.tags.includes("light_cc")) n.cc += 0.5;
         if (t.tags.includes("frontline")) n.front++;
         if (t.tags.includes("healing") || t.tags.includes("shield")) n.sustain++;
