@@ -1,0 +1,13 @@
+{
+  "name": "Lukas's Champions",
+  "author": "Lukas",
+  "version": "0.1.0",
+  "description": "Adds new champions. First up: Celion, a late-game scaling star mage.",
+  "last_updated": "2026-10-29",
+  "dependencies": [
+    {
+      "mod_id": "base",
+      "version": ">=0.6.0"
+    }
+  ]
+}

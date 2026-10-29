@@ -1,0 +1,12 @@
+{
+  "en": {
+    "description": {
+      "lukas_champions_celion": {
+        "name": "Celion",
+        "skill": "<#ffd25aff>Starlance<>: Fires a star bolt that deals <#9a7bffff>60 + 60% AP<> magic damage to the first enemy hit. Each hit permanently grants Celion <#9a7bffff>2 AP<>.",
+        "skill2": "<#ffd25aff>Falling Star<>: Calls down a comet at a target area. After a short delay it deals <#9a7bffff>80 + 60% AP<> magic damage and stuns enemies hit for 0.9 seconds.",
+        "ult": "<#ffd25aff>Mana Surge<>: For 5 seconds, Celion gains <#9a7bffff>20% AP<> and his Starlance and Falling Star cooldowns are halved."
+      }
+    }
+  }
+}

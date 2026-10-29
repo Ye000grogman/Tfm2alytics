@@ -1,0 +1,162 @@
+{
+  "id": "lukas_champions_celion",
+  "category": "Magician",
+  "tags": ["AP", "CC", "Magic", "Range"],
+  "sprite": "asset/base/aseprite_resources/champions/astrologer",
+  "anim_prefix": "",
+  "skill_icons": [
+    "asset/lukas_champions/icons/celion_skill",
+    "asset/lukas_champions/icons/celion_skill2",
+    "asset/lukas_champions/icons/celion_ult"
+  ],
+  "stat": {
+    "attack": 70,
+    "magic_power": 30,
+    "hp": 850,
+    "defence": 18,
+    "magic_resistance": 20,
+    "move_speed": 900,
+    "hp_regen": 0,
+    "stack": 0,
+    "crit_chance": 0
+  },
+  "growth": {
+    "attack": 5,
+    "magic_power": 24,
+    "hp": 95,
+    "defence": 6,
+    "magic_resistance": 3,
+    "move_speed": 9,
+    "hp_regen": 0,
+    "stack": 0,
+    "crit_chance": 0
+  },
+  "attack": {
+    "action_name": "attack",
+    "duration": 30,
+    "cooltime": 90,
+    "start_timing": 15,
+    "cancelable": true,
+    "range": 60000,
+    "casting_type": "Targeting",
+    "casting_target": "Enemy",
+    "attack_type": "BaseAttack",
+    "effect": {
+      "type": "TargetProjectile",
+      "speed": 4800,
+      "name": "celion_attack",
+      "y_offset": -4000,
+      "applied_target": "Enemy",
+      "applied_effects": [
+        {
+          "effect": { "type": "Attack", "damage": 0, "attack_ratio": 100 },
+          "casting_type": "Targeting"
+        },
+        {
+          "effect": { "type": "ViewEffect", "name": "astrologer_attack_hit" },
+          "casting_type": "Targeting"
+        },
+        {
+          "effect": { "type": "TargetSfx", "name": "astrologer_attack_hit" },
+          "casting_type": "Targeting"
+        }
+      ]
+    }
+  },
+  "skill": {
+    "action_name": "skill1",
+    "description": "#asset/base/text/champion?description.lukas_champions_celion.skill",
+    "duration": 24,
+    "cooltime": 300,
+    "start_timing": 14,
+    "cancelable": false,
+    "range": 75000,
+    "casting_type": "Direction",
+    "casting_target": "EnemyWithoutTower",
+    "attack_type": "Skill",
+    "effect": {
+      "type": "LinearProjectile",
+      "penetrate": false,
+      "speed": 5000,
+      "range": 75000,
+      "name": "celion_bolt",
+      "shape": { "Circle": { "radius": 6000 } },
+      "applied_target": "EnemyWithoutTower",
+      "applied_effects": [
+        {
+          "effect": { "type": "ApAttack", "damage": 60, "attack_ratio": 60 },
+          "casting_type": "Targeting"
+        },
+        {
+          "effect": {
+            "type": "AddCasterBuff",
+            "only_to_enemy": true,
+            "buff_state": {
+              "name": "celion_stardust",
+              "duration": "Permanent",
+              "magic_power": 2
+            }
+          },
+          "casting_type": "Targeting"
+        }
+      ]
+    }
+  },
+  "skill2": {
+    "action_name": "skill2",
+    "description": "#asset/base/text/champion?description.lukas_champions_celion.skill2",
+    "duration": 24,
+    "cooltime": 540,
+    "start_timing": 14,
+    "cancelable": false,
+    "range": 80000,
+    "casting_type": "Position",
+    "casting_target": "EnemyWithoutTower",
+    "attack_type": "Skill",
+    "effect": {
+      "type": "ParabolicProjectile",
+      "name": "celion_comet",
+      "travel_time": 45,
+      "range": 80000,
+      "shape": { "Circle": { "radius": 22000 } },
+      "applied_target": "EnemyWithoutTower",
+      "applied_effects": [
+        {
+          "effect": { "type": "ApAttack", "damage": 80, "attack_ratio": 60 },
+          "casting_type": "Targeting"
+        },
+        {
+          "effect": { "type": "Stun", "duration": 54 },
+          "casting_type": "Targeting"
+        }
+      ],
+      "end_effects": []
+    }
+  },
+  "ult": {
+    "action_name": "ult",
+    "description": "#asset/base/text/champion?description.lukas_champions_celion.ult",
+    "duration": 20,
+    "cooltime": 2700,
+    "start_timing": 10,
+    "cancelable": false,
+    "range": 70000,
+    "casting_type": "None",
+    "casting_target": "EnemyChampion",
+    "attack_type": "Skill",
+    "effect": {
+      "type": "AddCasterBuff",
+      "buff_state": {
+        "name": "celion_mana_surge",
+        "duration": { "Time": { "tick": 300 } },
+        "magic_power_mult": 20,
+        "skill_cooldown_mult": 50
+      }
+    }
+  },
+  "view_projectiles": [
+    { "type": "Sprite", "name": "celion_attack", "sprite": "asset/lukas_champions/projectiles/celion_bolt" },
+    { "type": "Sprite", "name": "celion_bolt", "sprite": "asset/lukas_champions/projectiles/celion_bolt" },
+    { "type": "Sprite", "name": "celion_comet", "sprite": "asset/lukas_champions/projectiles/celion_comet" }
+  ]
+}
